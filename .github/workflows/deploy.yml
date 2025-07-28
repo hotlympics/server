@@ -69,7 +69,7 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --service-account=${{ env.SERVICE_ACCOUNT }} \
-            --set-env-vars="NODE_ENV=production,PORT=8080"
+            --set-env-vars="NODE_ENV=production"
 
       # Output the deployed service URL
       - name: Output Service URL
