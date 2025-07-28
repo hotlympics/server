@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+npm-debug.log
+
+# Source control
+.git
+.github
+
+# Environment and config
+.env
+.env.example
+.env.*
+
+# Development files
+.eslintrc.js
+.gitignore
+README.md
+CHANGELOG.md
+jest.config.js
+vite.config.ts
+
+# Build artifacts
+dist
+coverage
+
+# Other
+.DS_Store
+*.log
+CLAUDE.md
