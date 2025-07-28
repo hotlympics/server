@@ -68,6 +68,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --allow-unauthenticated \
             --port 8080 \
+            --service-account=${{ env.SERVICE_ACCOUNT }} \
             --set-env-vars="NODE_ENV=production,PORT=8080"
 
       # Output the deployed service URL
