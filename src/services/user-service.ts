@@ -10,6 +10,8 @@ interface UserDocument {
     gender: 'unknown' | 'male' | 'female';
     dateOfBirth: Timestamp | null;
     rateCount: number;
+    uploadedImageIds: string[];
+    poolImageIds: string[];
 }
 
 export class UserService {
@@ -47,6 +49,8 @@ export class UserService {
             gender: data.gender,
             dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
             rateCount: data.rateCount,
+            uploadedImageIds: data.uploadedImageIds || [],
+            poolImageIds: data.poolImageIds || [],
         };
     }
 
@@ -68,6 +72,8 @@ export class UserService {
             gender: data.gender,
             dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
             rateCount: data.rateCount,
+            uploadedImageIds: data.uploadedImageIds || [],
+            poolImageIds: data.poolImageIds || [],
         };
     }
 
@@ -89,6 +95,8 @@ export class UserService {
             gender: data.gender,
             dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
             rateCount: data.rateCount,
+            uploadedImageIds: data.uploadedImageIds || [],
+            poolImageIds: data.poolImageIds || [],
         };
     }
 
@@ -109,6 +117,30 @@ export class UserService {
     static async incrementRateCount(id: string): Promise<void> {
         await this.collection.doc(id).update({
             rateCount: FieldValue.increment(1),
+        });
+    }
+
+    static async addUploadedImageId(userId: string, imageId: string): Promise<void> {
+        await this.collection.doc(userId).update({
+            uploadedImageIds: FieldValue.arrayUnion(imageId),
+        });
+    }
+
+    static async removeUploadedImageId(userId: string, imageId: string): Promise<void> {
+        await this.collection.doc(userId).update({
+            uploadedImageIds: FieldValue.arrayRemove(imageId),
+        });
+    }
+
+    static async addPoolImageId(userId: string, imageId: string): Promise<void> {
+        await this.collection.doc(userId).update({
+            poolImageIds: FieldValue.arrayUnion(imageId),
+        });
+    }
+
+    static async removePoolImageId(userId: string, imageId: string): Promise<void> {
+        await this.collection.doc(userId).update({
+            poolImageIds: FieldValue.arrayRemove(imageId),
         });
     }
 }

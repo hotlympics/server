@@ -46,6 +46,8 @@ router.post('/signup', (req: Request, res: Response): void => {
                 gender: 'unknown',
                 dateOfBirth: null,
                 rateCount: 0,
+                uploadedImageIds: [],
+                poolImageIds: [],
             });
 
             const token = generateToken(user);
@@ -149,6 +151,8 @@ router.post('/google/callback', (req: Request, res: Response): void => {
                         gender: 'unknown',
                         dateOfBirth: null,
                         rateCount: 0,
+                        uploadedImageIds: [],
+                        poolImageIds: [],
                     });
                 }
             }
