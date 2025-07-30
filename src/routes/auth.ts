@@ -1,162 +1,175 @@
 import { Router, Request, Response } from 'express';
-import { createUser, findUserByEmail, findUserByGoogleId } from '../models/user.js';
-import { 
-    hashPassword, 
-    comparePassword, 
-    generateToken, 
-    verifyGoogleToken 
+import {
+    verifyEmail,
+    verifyPassword,
+    hashPassword,
+    verifyGoogleToken,
+    generateToken,
+    comparePassword,
 } from '../utils/auth.js';
+import { UserService } from '../services/user-service.js';
 
 const router = Router();
 
 // Email/Password Sign Up
-router.post('/signup', async (req: Request, res: Response): Promise<void> => {
-    console.log("Received signup request");
-    try {
-        const { email, password } = req.body;
+router.post('/signup', (req: Request, res: Response): void => {
+    (async () => {
+        try {
+            const { email, password } = req.body as { email: string; password: string };
 
-        console.log(password);
-
-        if (!email || !password) {
-            res.status(400).json({ error: 'Email and password are required' });
-            return;
-        }
-
-        if (password.length < 6) {
-            res.status(400).json({ error: 'Password must be at least 6 characters' });
-            return;
-        }
-
-        const existingUser = findUserByEmail(email);
-        if (existingUser) {
-            res.status(409).json({ error: 'User already exists' });
-            return;
-        }
-
-        const hashedPassword = await hashPassword(password);
-        const user = createUser({
-            email,
-            password: hashedPassword,
-            provider: 'email',
-        });
-
-        const token = generateToken(user);
-
-        res.json({
-            user: {
-                id: user.id,
-                email: user.email,
-                provider: user.provider,
-                createdAt: user.createdAt,
-                hasUploadedPhoto: user.hasUploadedPhoto,
-                ratingCount: user.ratingCount,
-            },
-            token,
-        });
-    } catch (error) {
-        console.error('Signup error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Email/Password Sign In
-router.post('/signin', async (req: Request, res: Response): Promise<void> => {
-    console.log("Received signin request");
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            res.status(400).json({ error: 'Email and password are required' });
-            return;
-        }
-
-        const user = findUserByEmail(email);
-        if (!user || !user.password) {
-            res.status(401).json({ error: 'Invalid credentials' });
-            return;
-        }
-
-        const isValidPassword = await comparePassword(password, user.password);
-        if (!isValidPassword) {
-            res.status(401).json({ error: 'Invalid credentials' });
-            return;
-        }
-
-        const token = generateToken(user);
-
-        res.json({
-            user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                provider: user.provider,
-                createdAt: user.createdAt,
-                hasUploadedPhoto: user.hasUploadedPhoto,
-                ratingCount: user.ratingCount,
-            },
-            token,
-        });
-    } catch (error) {
-        console.error('Signin error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-// Google OAuth Callback
-router.post('/google/callback', async (req: Request, res: Response): Promise<void> => {
-    console.log("Received Google OAuth callback");
-    try {
-        const { code } = req.body;
-
-        if (!code) {
-            res.status(400).json({ error: 'Authorization code is required' });
-            return;
-        }
-
-        const googleData = await verifyGoogleToken(code);
-
-        let user = findUserByGoogleId(googleData.googleId);
-
-        if (!user) {
-            // Check if user exists with same email
-            user = findUserByEmail(googleData.email);
-
-            if (user && user.provider !== 'google') {
-                res.status(409).json({ 
-                    error: 'An account with this email already exists. Please sign in with email/password.' 
-                });
+            const emailVerified = verifyEmail(email);
+            if (!emailVerified.result) {
+                res.status(400).json({ error: emailVerified.message });
                 return;
             }
 
-            // Create new user
-            user = createUser({
-                email: googleData.email,
-                name: googleData.name,
-                googleId: googleData.googleId,
-                profilePicture: googleData.profilePicture,
-                provider: 'google',
+            const passwordVerified = verifyPassword(password);
+            if (!passwordVerified.result) {
+                res.status(400).json({ error: passwordVerified.message });
+                return;
+            }
+
+            // Check if user already exists
+            const existingUser = await UserService.getUserByEmail(email);
+            if (existingUser) {
+                res.status(400).json({ error: 'User already exists' });
+                return;
+            }
+
+            const hashedPassword = await hashPassword(password);
+
+            // Create new user in Firestore
+            const user = await UserService.createUser({
+                email,
+                googleId: null,
+                password: hashedPassword,
+                gender: 'unknown',
+                dateOfBirth: null,
+                rateCount: 0,
             });
+
+            const token = generateToken(user);
+            res.json({
+                user: user,
+                token: token,
+            });
+        } catch (error) {
+            console.error('Signup error:', error);
+            res.status(500).json({ error: 'Internal server error' });
         }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
 
-        const token = generateToken(user);
+// Email/Password Sign In
+router.post('/signin', (req: Request, res: Response): void => {
+    (async () => {
+        console.log('Received signin request');
+        try {
+            const { email, password } = req.body as { email: string; password: string };
 
-        res.json({
-            user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                profilePicture: user.profilePicture,
-                provider: user.provider,
-                createdAt: user.createdAt,
-                hasUploadedPhoto: user.hasUploadedPhoto,
-                ratingCount: user.ratingCount,
-            },
-            token,
-        });
-    } catch (error) {
-        console.error('Google auth error:', error);
-        res.status(500).json({ error: 'Authentication failed' });
-    }
+            const emailVerified = verifyEmail(email);
+            if (!emailVerified.result) {
+                res.status(400).json({ error: emailVerified.message });
+                return;
+            }
+
+            // Get user from database
+            const user = await UserService.getUserByEmail(email);
+            if (!user) {
+                res.status(401).json({ error: 'Invalid email or password' });
+                return;
+            }
+
+            // Check if user has a password (not Google-only account)
+            if (!user.password) {
+                res.status(401).json({ error: 'Please sign in with Google' });
+                return;
+            }
+
+            // Verify password
+            const isValidPassword = await comparePassword(password, user.password);
+            if (!isValidPassword) {
+                res.status(401).json({ error: 'Invalid email or password' });
+                return;
+            }
+
+            const token = generateToken(user);
+            res.json({
+                user: user,
+                token: token,
+            });
+        } catch (error) {
+            console.error('Signin error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Google OAuth Callback
+router.post('/google/callback', (req: Request, res: Response): void => {
+    (async () => {
+        console.log('Received Google OAuth callback');
+        try {
+            const { code } = req.body as { code: string };
+
+            if (!code) {
+                res.status(400).json({ error: 'Authorization code is required' });
+                return;
+            }
+
+            const googleData = await verifyGoogleToken(code);
+
+            if (!googleData) {
+                res.status(400).json({ error: 'Invalid Google token' });
+                return;
+            }
+
+            // Check if user exists by Google ID
+            let user = await UserService.getUserByGoogleId(googleData.googleId);
+
+            if (!user) {
+                // Check if user exists by email
+                user = await UserService.getUserByEmail(googleData.email);
+
+                if (user) {
+                    // User exists with email but not Google ID, update their Google ID
+                    user = await UserService.updateUser(user.id, {
+                        googleId: googleData.googleId,
+                    });
+                } else {
+                    // Create new user
+                    user = await UserService.createUser({
+                        email: googleData.email,
+                        googleId: googleData.googleId,
+                        password: null,
+                        gender: 'unknown',
+                        dateOfBirth: null,
+                        rateCount: 0,
+                    });
+                }
+            }
+
+            if (!user) {
+                res.status(500).json({ error: 'Failed to create or retrieve user' });
+                return;
+            }
+
+            const token = generateToken(user);
+            res.json({
+                user: user,
+                token: token,
+            });
+        } catch (error) {
+            console.error('Google auth error:', error);
+            res.status(500).json({ error: 'Authentication failed' });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
 });
 
 export default router;
