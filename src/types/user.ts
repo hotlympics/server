@@ -6,4 +6,6 @@ export interface User {
     gender: 'unknown' | 'male' | 'female';
     dateOfBirth: Date | null;
     rateCount: number;
+    uploadedImageIds: string[];
+    poolImageIds: string[];
 }

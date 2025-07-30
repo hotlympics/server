@@ -11,4 +11,6 @@ export const firestore = new Firestore({
 // Collection names
 export const COLLECTIONS = {
     USERS: 'users',
+    IMAGE_DATA: 'image-data',
+    BATTLES: 'battles',
 } as const;
