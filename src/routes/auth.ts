@@ -8,6 +8,7 @@ import {
     comparePassword,
 } from '../utils/auth.js';
 import { UserService } from '../services/user-service.js';
+import { FirebaseAuthService } from '../services/firebase-auth-service.js';
 
 const router = Router();
 
@@ -37,45 +38,64 @@ router.post('/signup', (req: Request, res: Response): void => {
                     res.status(400).json({ error: 'User already exists' });
                     return;
                 } else {
-                    // Google-only account, add password to existing account
+                    // Google-only account, need to verify email before adding password
                     const hashedPassword = await hashPassword(password);
-                    const user = await UserService.updateUser(existingUser.id, {
-                        password: hashedPassword,
-                    });
 
-                    if (!user) {
-                        res.status(500).json({ error: 'Failed to update user' });
+                    try {
+                        const firebaseUid =
+                            await FirebaseAuthService.createPasswordVerificationForGoogleUser(
+                                email,
+                                password,
+                            );
+
+                        // Store the hashed password and user ID temporarily
+                        await FirebaseAuthService.storePendingUser(
+                            firebaseUid,
+                            email,
+                            hashedPassword,
+                        );
+
+                        res.json({
+                            status: 'pending_verification',
+                            firebaseUid,
+                            message: 'Please check your email to verify your account',
+                            isGoogleUser: true,
+                            userId: existingUser.id,
+                        });
+                        return;
+                    } catch (error) {
+                        console.error('Error creating Firebase user for Google account:', error);
+                        res.status(500).json({
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : 'Failed to initiate verification',
+                        });
                         return;
                     }
-
-                    const token = generateToken(user);
-                    res.json({
-                        user: user,
-                        token: token,
-                    });
-                    return;
                 }
             }
 
+            // New user signup - require email verification
             const hashedPassword = await hashPassword(password);
 
-            // Create new user in Firestore
-            const user = await UserService.createUser({
-                email,
-                googleId: null,
-                password: hashedPassword,
-                gender: 'unknown',
-                dateOfBirth: null,
-                rateCount: 0,
-                uploadedImageIds: [],
-                poolImageIds: [],
-            });
+            try {
+                const firebaseUid = await FirebaseAuthService.createUnverifiedUser(email, password);
 
-            const token = generateToken(user);
-            res.json({
-                user: user,
-                token: token,
-            });
+                // Store pending user data
+                await FirebaseAuthService.storePendingUser(firebaseUid, email, hashedPassword);
+
+                res.json({
+                    status: 'pending_verification',
+                    firebaseUid,
+                    message: 'Please check your email to verify your account',
+                });
+            } catch (error) {
+                console.error('Error creating Firebase user:', error);
+                res.status(500).json({
+                    error: error instanceof Error ? error.message : 'Failed to create user',
+                });
+            }
         } catch (error) {
             console.error('Signup error:', error);
             res.status(500).json({ error: 'Internal server error' });
@@ -126,6 +146,111 @@ router.post('/signin', (req: Request, res: Response): void => {
         } catch (error) {
             console.error('Signin error:', error);
             res.status(500).json({ error: 'Internal server error' });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Check email verification status
+router.post('/verify-status', (req: Request, res: Response): void => {
+    (async () => {
+        try {
+            const { firebaseUid, isGoogleUser, userId } = req.body as {
+                firebaseUid: string;
+                isGoogleUser?: boolean;
+                userId?: string;
+            };
+
+            if (!firebaseUid) {
+                res.status(400).json({ error: 'Firebase UID is required' });
+                return;
+            }
+
+            const isVerified = await FirebaseAuthService.checkEmailVerified(firebaseUid);
+
+            if (!isVerified) {
+                res.json({ verified: false });
+                return;
+            }
+
+            // Email is verified, complete the signup/password addition
+            if (isGoogleUser && userId) {
+                // Complete password addition for Google user
+                const pendingDoc = await UserService.getUserById(userId);
+                if (!pendingDoc) {
+                    res.status(404).json({ error: 'User not found' });
+                    return;
+                }
+
+                // Get the hashed password from pending data
+                const pendingData = await FirebaseAuthService.getPendingUserData(firebaseUid);
+                if (!pendingData) {
+                    res.status(404).json({ error: 'Pending data not found' });
+                    return;
+                }
+
+                const user = await FirebaseAuthService.completePasswordAddition(
+                    firebaseUid,
+                    userId,
+                    pendingData.hashedPassword,
+                );
+
+                if (!user) {
+                    res.status(500).json({ error: 'Failed to update user' });
+                    return;
+                }
+
+                const token = generateToken(user);
+                res.json({
+                    verified: true,
+                    user,
+                    token,
+                });
+            } else {
+                // Complete new user signup
+                const user = await FirebaseAuthService.completeSignup(firebaseUid);
+
+                if (!user) {
+                    res.status(500).json({ error: 'Failed to create user' });
+                    return;
+                }
+
+                const token = generateToken(user);
+                res.json({
+                    verified: true,
+                    user,
+                    token,
+                });
+            }
+        } catch (error) {
+            console.error('Verify status error:', error);
+            res.status(500).json({ error: 'Internal server error' });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Resend verification email
+router.post('/resend-verification', (req: Request, res: Response): void => {
+    (async () => {
+        try {
+            const { firebaseUid } = req.body as { firebaseUid: string };
+
+            if (!firebaseUid) {
+                res.status(400).json({ error: 'Firebase UID is required' });
+                return;
+            }
+
+            await FirebaseAuthService.resendVerificationEmail(firebaseUid);
+            res.json({ message: 'Verification email sent' });
+        } catch (error) {
+            console.error('Resend verification error:', error);
+            res.status(500).json({
+                error:
+                    error instanceof Error ? error.message : 'Failed to resend verification email',
+            });
         }
     })().catch(() => {
         // Error already handled in try-catch
