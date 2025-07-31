@@ -32,8 +32,29 @@ router.post('/signup', (req: Request, res: Response): void => {
             // Check if user already exists
             const existingUser = await UserService.getUserByEmail(email);
             if (existingUser) {
-                res.status(400).json({ error: 'User already exists' });
-                return;
+                if (existingUser.password) {
+                    // User already has a password
+                    res.status(400).json({ error: 'User already exists' });
+                    return;
+                } else {
+                    // Google-only account, add password to existing account
+                    const hashedPassword = await hashPassword(password);
+                    const user = await UserService.updateUser(existingUser.id, {
+                        password: hashedPassword,
+                    });
+
+                    if (!user) {
+                        res.status(500).json({ error: 'Failed to update user' });
+                        return;
+                    }
+
+                    const token = generateToken(user);
+                    res.json({
+                        user: user,
+                        token: token,
+                    });
+                    return;
+                }
             }
 
             const hashedPassword = await hashPassword(password);
@@ -130,32 +151,11 @@ router.post('/google/callback', (req: Request, res: Response): void => {
                 return;
             }
 
-            // Check if user exists by Google ID
-            let user = await UserService.getUserByGoogleId(googleData.googleId);
-
-            if (!user) {
-                // Check if user exists by email
-                user = await UserService.getUserByEmail(googleData.email);
-
-                if (user) {
-                    // User exists with email but not Google ID, update their Google ID
-                    user = await UserService.updateUser(user.id, {
-                        googleId: googleData.googleId,
-                    });
-                } else {
-                    // Create new user
-                    user = await UserService.createUser({
-                        email: googleData.email,
-                        googleId: googleData.googleId,
-                        password: null,
-                        gender: 'unknown',
-                        dateOfBirth: null,
-                        rateCount: 0,
-                        uploadedImageIds: [],
-                        poolImageIds: [],
-                    });
-                }
-            }
+            // Use transaction-based method to prevent race conditions
+            const user = await UserService.findOrCreateGoogleUser({
+                email: googleData.email,
+                googleId: googleData.googleId,
+            });
 
             if (!user) {
                 res.status(500).json({ error: 'Failed to create or retrieve user' });
