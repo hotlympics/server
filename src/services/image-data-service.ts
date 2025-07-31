@@ -25,6 +25,23 @@ export class ImageDataService {
         const doc = await firestore.collection(COLLECTION_NAME).doc(imageId).get();
         return doc.exists ? (doc.data() as ImageData) : null;
     }
+
+    async updatePoolStatus(imageId: string, inPool: boolean): Promise<void> {
+        await firestore.collection(COLLECTION_NAME).doc(imageId).update({ inPool });
+    }
+
+    async batchUpdatePoolStatus(
+        updates: Array<{ imageId: string; inPool: boolean }>,
+    ): Promise<void> {
+        const batch = firestore.batch();
+
+        for (const { imageId, inPool } of updates) {
+            const docRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+            batch.update(docRef, { inPool });
+        }
+
+        await batch.commit();
+    }
 }
 
 export const imageDataService = new ImageDataService();
