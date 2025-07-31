@@ -4,18 +4,41 @@ import { Timestamp, FieldValue } from '@google-cloud/firestore';
 
 // UserDocument is the same as User but with Firestore Timestamp instead of Date
 interface UserDocument {
+    firebaseUid: string;
     email: string;
     googleId: string | null;
-    password: string | null;
     gender: 'unknown' | 'male' | 'female';
     dateOfBirth: Timestamp | null;
     rateCount: number;
     uploadedImageIds: string[];
     poolImageIds: string[];
+    displayName?: string | null;
+    photoUrl?: string | null;
 }
 
 export class UserService {
     private static collection = firestore.collection(COLLECTIONS.USERS);
+
+    private static documentToUser(doc: FirebaseFirestore.DocumentSnapshot): User | null {
+        if (!doc.exists) {
+            return null;
+        }
+
+        const data = doc.data() as UserDocument;
+        return {
+            id: doc.id,
+            firebaseUid: data.firebaseUid,
+            email: data.email,
+            googleId: data.googleId,
+            gender: data.gender,
+            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+            rateCount: data.rateCount,
+            uploadedImageIds: data.uploadedImageIds || [],
+            poolImageIds: data.poolImageIds || [],
+            displayName: data.displayName,
+            photoUrl: data.photoUrl,
+        };
+    }
 
     static async createUser(userData: Omit<User, 'id'>): Promise<User> {
         const documentData: UserDocument = {
@@ -40,18 +63,7 @@ export class UserService {
             return null;
         }
 
-        const data = doc.data() as UserDocument;
-        return {
-            id: doc.id,
-            email: data.email,
-            googleId: data.googleId,
-            password: data.password,
-            gender: data.gender,
-            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
-            rateCount: data.rateCount,
-            uploadedImageIds: data.uploadedImageIds || [],
-            poolImageIds: data.poolImageIds || [],
-        };
+        return this.documentToUser(doc);
     }
 
     static async getUserByEmail(email: string): Promise<User | null> {
@@ -62,19 +74,7 @@ export class UserService {
         }
 
         const doc = snapshot.docs[0];
-        const data = doc.data() as UserDocument;
-
-        return {
-            id: doc.id,
-            email: data.email,
-            googleId: data.googleId,
-            password: data.password,
-            gender: data.gender,
-            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
-            rateCount: data.rateCount,
-            uploadedImageIds: data.uploadedImageIds || [],
-            poolImageIds: data.poolImageIds || [],
-        };
+        return this.documentToUser(doc);
     }
 
     static async getUserByGoogleId(googleId: string): Promise<User | null> {
@@ -85,19 +85,7 @@ export class UserService {
         }
 
         const doc = snapshot.docs[0];
-        const data = doc.data() as UserDocument;
-
-        return {
-            id: doc.id,
-            email: data.email,
-            googleId: data.googleId,
-            password: data.password,
-            gender: data.gender,
-            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
-            rateCount: data.rateCount,
-            uploadedImageIds: data.uploadedImageIds || [],
-            poolImageIds: data.poolImageIds || [],
-        };
+        return this.documentToUser(doc);
     }
 
     static async updateUser(id: string, updates: Partial<Omit<User, 'id'>>): Promise<User | null> {
@@ -161,14 +149,16 @@ export class UserService {
                 const data = doc.data() as UserDocument;
                 return {
                     id: doc.id,
+                    firebaseUid: data.firebaseUid,
                     email: data.email,
                     googleId: data.googleId,
-                    password: data.password,
                     gender: data.gender,
                     dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
                     rateCount: data.rateCount,
                     uploadedImageIds: data.uploadedImageIds || [],
                     poolImageIds: data.poolImageIds || [],
+                    displayName: data.displayName,
+                    photoUrl: data.photoUrl,
                 };
             }
 
@@ -185,27 +175,31 @@ export class UserService {
                 const data = doc.data() as UserDocument;
                 return {
                     id: doc.id,
+                    firebaseUid: data.firebaseUid,
                     email: data.email,
                     googleId: googleData.googleId, // Use the new Google ID
-                    password: data.password,
                     gender: data.gender,
                     dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
                     rateCount: data.rateCount,
                     uploadedImageIds: data.uploadedImageIds || [],
                     poolImageIds: data.poolImageIds || [],
+                    displayName: data.displayName,
+                    photoUrl: data.photoUrl,
                 };
             }
 
             // No existing user found, create a new one
             const newUserData: UserDocument = {
+                firebaseUid: '', // This will need to be updated when migrating to Firebase Auth
                 email: googleData.email,
                 googleId: googleData.googleId,
-                password: null,
                 gender: 'unknown',
                 dateOfBirth: null,
                 rateCount: 0,
                 uploadedImageIds: [],
                 poolImageIds: [],
+                displayName: null,
+                photoUrl: null,
             };
 
             const newDocRef = this.collection.doc(); // Create a new document reference
@@ -213,11 +207,60 @@ export class UserService {
 
             return {
                 id: newDocRef.id,
-                ...newUserData,
+                firebaseUid: newUserData.firebaseUid,
+                email: newUserData.email,
+                googleId: newUserData.googleId,
+                gender: newUserData.gender,
                 dateOfBirth: null,
+                rateCount: newUserData.rateCount,
+                uploadedImageIds: newUserData.uploadedImageIds,
+                poolImageIds: newUserData.poolImageIds,
+                displayName: newUserData.displayName,
+                photoUrl: newUserData.photoUrl,
             };
         });
 
         return result;
+    }
+
+    static async getUserByFirebaseUid(firebaseUid: string): Promise<User | null> {
+        const snapshot = await this.collection
+            .where('firebaseUid', '==', firebaseUid)
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            return null;
+        }
+
+        return this.documentToUser(snapshot.docs[0]);
+    }
+
+    static async createUserFromFirebase(data: {
+        firebaseUid: string;
+        email: string;
+        displayName?: string | null;
+        photoUrl?: string | null;
+    }): Promise<User> {
+        const newUserData: UserDocument = {
+            firebaseUid: data.firebaseUid,
+            email: data.email,
+            googleId: null,
+            gender: 'unknown',
+            dateOfBirth: null,
+            rateCount: 0,
+            uploadedImageIds: [],
+            poolImageIds: [],
+            displayName: data.displayName || null,
+            photoUrl: data.photoUrl || null,
+        };
+
+        const docRef = await this.collection.add(newUserData);
+
+        return {
+            id: docRef.id,
+            ...newUserData,
+            dateOfBirth: null,
+        };
     }
 }
