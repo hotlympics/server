@@ -22,3 +22,4 @@ export const firestore = firebaseAdmin.firestore();
 
 // Re-export admin for any other needs
 export { firebaseAdmin };
+export { firebaseAdmin as admin };

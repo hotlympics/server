@@ -1,13 +1,29 @@
 import { Router, Response } from 'express';
-import { authMiddleware, type AuthRequest } from '../middleware/auth.js';
+import {
+    firebaseAuthMiddleware,
+    type AuthRequest,
+} from '../middleware/firebase-auth-middleware.js';
 import { UserService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 
 const router = Router();
 
+// Get current user info
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get('/', firebaseAuthMiddleware, (req: AuthRequest, res: Response): void => {
+    try {
+        // The user data is already attached to the request by the middleware
+        const user = req.user!;
+        res.json(user);
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({ error: { message: 'Failed to get user info' } });
+    }
+});
+
 // Update user profile
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.put('/profile', authMiddleware, (req: AuthRequest, res: Response): void => {
+router.put('/profile', firebaseAuthMiddleware, (req: AuthRequest, res: Response): void => {
     (async () => {
         try {
             const userId = req.user!.id;
@@ -73,7 +89,7 @@ router.put('/profile', authMiddleware, (req: AuthRequest, res: Response): void =
 
 // Update user pool selections
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.put('/pool', authMiddleware, (req: AuthRequest, res: Response): void => {
+router.put('/pool', firebaseAuthMiddleware, (req: AuthRequest, res: Response): void => {
     (async () => {
         try {
             const userId = req.user!.id;

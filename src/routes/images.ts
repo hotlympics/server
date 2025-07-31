@@ -1,18 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { upload } from '../middleware/upload-middleware.js';
 import { storageService } from '../services/storage-service.js';
-import { authMiddleware } from '../middleware/auth-middleware.js';
+import {
+    firebaseAuthMiddleware,
+    type AuthRequest,
+} from '../middleware/firebase-auth-middleware.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
 import { UserService } from '../services/user-service.js';
-
-interface AuthRequest extends Request {
-    user?: {
-        id: string;
-        email: string;
-    };
-}
 
 const router = Router();
 
@@ -24,7 +20,8 @@ const asyncHandler =
 
 router.post(
     '/upload',
-    authMiddleware,
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
     upload.single('image'),
     asyncHandler(async (req: AuthRequest, res: Response) => {
         try {
@@ -106,7 +103,8 @@ router.post(
 
 router.get(
     '/user',
-    authMiddleware,
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
     asyncHandler(async (req: AuthRequest, res: Response) => {
         try {
             if (!req.user?.id) {
@@ -218,7 +216,8 @@ router.get(
 
 router.delete(
     '/:imageId',
-    authMiddleware,
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
     asyncHandler(async (req: AuthRequest, res: Response) => {
         try {
             const { imageId } = req.params;
