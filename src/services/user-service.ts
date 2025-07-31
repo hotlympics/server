@@ -143,4 +143,81 @@ export class UserService {
             poolImageIds: FieldValue.arrayRemove(imageId),
         });
     }
+
+    static async findOrCreateGoogleUser(googleData: {
+        email: string;
+        googleId: string;
+    }): Promise<User> {
+        // Use a transaction to ensure atomicity
+        const result = await firestore.runTransaction(async (transaction) => {
+            // First, try to find by googleId
+            const googleIdQuery = await transaction.get(
+                this.collection.where('googleId', '==', googleData.googleId).limit(1),
+            );
+
+            if (!googleIdQuery.empty) {
+                // User exists with this Google ID
+                const doc = googleIdQuery.docs[0];
+                const data = doc.data() as UserDocument;
+                return {
+                    id: doc.id,
+                    email: data.email,
+                    googleId: data.googleId,
+                    password: data.password,
+                    gender: data.gender,
+                    dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+                    rateCount: data.rateCount,
+                    uploadedImageIds: data.uploadedImageIds || [],
+                    poolImageIds: data.poolImageIds || [],
+                };
+            }
+
+            // Next, try to find by email
+            const emailQuery = await transaction.get(
+                this.collection.where('email', '==', googleData.email).limit(1),
+            );
+
+            if (!emailQuery.empty) {
+                // User exists with this email but not Google ID, update it
+                const doc = emailQuery.docs[0];
+                transaction.update(doc.ref, { googleId: googleData.googleId });
+
+                const data = doc.data() as UserDocument;
+                return {
+                    id: doc.id,
+                    email: data.email,
+                    googleId: googleData.googleId, // Use the new Google ID
+                    password: data.password,
+                    gender: data.gender,
+                    dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+                    rateCount: data.rateCount,
+                    uploadedImageIds: data.uploadedImageIds || [],
+                    poolImageIds: data.poolImageIds || [],
+                };
+            }
+
+            // No existing user found, create a new one
+            const newUserData: UserDocument = {
+                email: googleData.email,
+                googleId: googleData.googleId,
+                password: null,
+                gender: 'unknown',
+                dateOfBirth: null,
+                rateCount: 0,
+                uploadedImageIds: [],
+                poolImageIds: [],
+            };
+
+            const newDocRef = this.collection.doc(); // Create a new document reference
+            transaction.set(newDocRef, newUserData);
+
+            return {
+                id: newDocRef.id,
+                ...newUserData,
+                dateOfBirth: null,
+            };
+        });
+
+        return result;
+    }
 }
