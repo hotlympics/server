@@ -144,12 +144,15 @@ export class UserService {
         });
     }
 
-    static async findOrCreateGoogleUser(googleData: { email: string; googleId: string }): Promise<User> {
+    static async findOrCreateGoogleUser(googleData: {
+        email: string;
+        googleId: string;
+    }): Promise<User> {
         // Use a transaction to ensure atomicity
         const result = await firestore.runTransaction(async (transaction) => {
             // First, try to find by googleId
             const googleIdQuery = await transaction.get(
-                this.collection.where('googleId', '==', googleData.googleId).limit(1)
+                this.collection.where('googleId', '==', googleData.googleId).limit(1),
             );
 
             if (!googleIdQuery.empty) {
@@ -171,7 +174,7 @@ export class UserService {
 
             // Next, try to find by email
             const emailQuery = await transaction.get(
-                this.collection.where('email', '==', googleData.email).limit(1)
+                this.collection.where('email', '==', googleData.email).limit(1),
             );
 
             if (!emailQuery.empty) {

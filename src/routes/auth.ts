@@ -42,12 +42,12 @@ router.post('/signup', (req: Request, res: Response): void => {
                     const user = await UserService.updateUser(existingUser.id, {
                         password: hashedPassword,
                     });
-                    
+
                     if (!user) {
                         res.status(500).json({ error: 'Failed to update user' });
                         return;
                     }
-                    
+
                     const token = generateToken(user);
                     res.json({
                         user: user,
