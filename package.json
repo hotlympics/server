@@ -35,7 +35,6 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.3",
-    "@google-cloud/storage": "^7.16.0",
     "@types/multer": "^2.0.0",
     "@types/uuid": "^10.0.0",
     "chalk": "^5.4.1",
@@ -46,7 +45,6 @@
     "google-auth-library": "^10.2.0",
     "helmet": "^7.1.0",
     "multer": "^2.0.2",
-    "multer-cloud-storage": "^4.1.0",
     "uuid": "^11.1.0"
   }
 }
