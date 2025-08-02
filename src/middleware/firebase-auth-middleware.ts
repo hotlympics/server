@@ -60,14 +60,25 @@ export const firebaseAuthMiddleware = async (
         next();
     } catch (error) {
         console.error('Firebase auth error:', error);
+        console.error('Error details:', {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined,
+        });
 
         if (error instanceof Error) {
             if (error.message.includes('Firebase ID token has expired')) {
                 res.status(401).json({ error: 'Token expired' });
             } else if (error.message.includes('Decoding Firebase ID token failed')) {
                 res.status(401).json({ error: 'Invalid token' });
+            } else if (error.message.includes('Firebase project ID is required')) {
+                console.error('CRITICAL: Firebase project ID not configured');
+                res.status(500).json({ error: 'Server configuration error' });
+            } else if (error.message.includes('Could not load the default credentials')) {
+                console.error('CRITICAL: Firebase Admin SDK credentials not configured');
+                res.status(500).json({ error: 'Server configuration error' });
             } else {
-                res.status(401).json({ error: 'Authentication failed' });
+                res.status(401).json({ error: 'Authentication failed', details: error.message });
             }
         } else {
             res.status(401).json({ error: 'Authentication failed' });
