@@ -8,7 +8,7 @@ import ratingsRouter from './ratings.js';
 const router = Router();
 
 router.use('/health', healthRouter);
-router.use('/auth', firebaseAuthRouter); // Firebase auth routes
+router.use('/auth', firebaseAuthRouter);
 router.use('/images', imagesRouter);
 router.use('/user', userRouter);
 router.use('/ratings', ratingsRouter);
