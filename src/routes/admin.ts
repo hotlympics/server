@@ -254,14 +254,14 @@ router.post(
                 if (poolImageIndices && uploadedImageIds.length > 0) {
                     try {
                         const indices = JSON.parse(poolImageIndices) as number[];
-                        
+
                         // Map indices to actual image IDs
                         for (const index of indices) {
                             if (index >= 0 && index < uploadedImageIds.length) {
                                 poolImageIdsToAdd.push(uploadedImageIds[index]);
                             }
                         }
-                        
+
                         if (poolImageIdsToAdd.length > 0) {
                             // Update user document with pool image IDs
                             await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
@@ -432,10 +432,11 @@ router.get('/stats', adminAuthMiddleware, (_req: AdminRequest, res: Response): v
             const battlesSnapshot = await firestore.collection(COLLECTIONS.BATTLES).get();
             const battleCount = battlesSnapshot.size;
 
-            // Get users by gender
+            // Get users by gender and count pool images
             let maleUsers = 0;
             let femaleUsers = 0;
             let unknownUsers = 0;
+            let totalPoolImages = 0;
 
             usersSnapshot.docs.forEach((doc) => {
                 const data = doc.data() as UserDocument;
@@ -443,12 +444,18 @@ router.get('/stats', adminAuthMiddleware, (_req: AdminRequest, res: Response): v
                 if (gender === 'male') maleUsers++;
                 else if (gender === 'female') femaleUsers++;
                 else unknownUsers++;
+
+                // Count pool images
+                if (data.poolImageIds && Array.isArray(data.poolImageIds)) {
+                    totalPoolImages += data.poolImageIds.length;
+                }
             });
 
             res.json({
                 totalUsers: userCount,
                 totalImages: imageCount,
                 totalBattles: battleCount,
+                totalPoolImages: totalPoolImages,
                 usersByGender: {
                     male: maleUsers,
                     female: femaleUsers,
@@ -530,84 +537,88 @@ router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: 
 
 // Toggle photo pool status
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.put('/photos/:imageId/pool', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
-    (async () => {
-        try {
-            const { imageId } = req.params;
-            const { userId, addToPool } = req.body as {
-                userId: string;
-                addToPool: boolean;
-            };
+router.put(
+    '/photos/:imageId/pool',
+    adminAuthMiddleware,
+    (req: AdminRequest, res: Response): void => {
+        (async () => {
+            try {
+                const { imageId } = req.params;
+                const { userId, addToPool } = req.body as {
+                    userId: string;
+                    addToPool: boolean;
+                };
 
-            if (!userId || typeof addToPool !== 'boolean') {
-                res.status(400).json({
-                    error: { message: 'userId and addToPool (boolean) are required' },
+                if (!userId || typeof addToPool !== 'boolean') {
+                    res.status(400).json({
+                        error: { message: 'userId and addToPool (boolean) are required' },
+                    });
+                    return;
+                }
+
+                // Get user document
+                const userDoc = await firestore.collection(COLLECTIONS.USERS).doc(userId).get();
+                if (!userDoc.exists) {
+                    res.status(404).json({ error: { message: 'User not found' } });
+                    return;
+                }
+
+                const userData = userDoc.data() as UserDocument;
+
+                // Verify the image belongs to this user
+                if (!userData.uploadedImageIds.includes(imageId)) {
+                    res.status(400).json({
+                        error: { message: 'Image does not belong to this user' },
+                    });
+                    return;
+                }
+
+                const currentPoolImageIds = userData.poolImageIds || [];
+                const isCurrentlyInPool = currentPoolImageIds.includes(imageId);
+
+                if (addToPool && isCurrentlyInPool) {
+                    res.status(400).json({
+                        error: { message: 'Image is already in the pool' },
+                    });
+                    return;
+                }
+
+                if (!addToPool && !isCurrentlyInPool) {
+                    res.status(400).json({
+                        error: { message: 'Image is not in the pool' },
+                    });
+                    return;
+                }
+
+                // Update pool status
+                let updatedPoolImageIds: string[];
+                if (addToPool) {
+                    updatedPoolImageIds = [...currentPoolImageIds, imageId];
+                    console.log(`Adding image ${imageId} to pool for user ${userId}`);
+                } else {
+                    updatedPoolImageIds = currentPoolImageIds.filter((id) => id !== imageId);
+                    console.log(`Removing image ${imageId} from pool for user ${userId}`);
+                }
+
+                // Update user document
+                await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
+                    poolImageIds: updatedPoolImageIds,
                 });
-                return;
-            }
 
-            // Get user document
-            const userDoc = await firestore.collection(COLLECTIONS.USERS).doc(userId).get();
-            if (!userDoc.exists) {
-                res.status(404).json({ error: { message: 'User not found' } });
-                return;
-            }
-
-            const userData = userDoc.data() as UserDocument;
-
-            // Verify the image belongs to this user
-            if (!userData.uploadedImageIds.includes(imageId)) {
-                res.status(400).json({
-                    error: { message: 'Image does not belong to this user' },
+                res.json({
+                    message: addToPool
+                        ? 'Photo added to pool successfully'
+                        : 'Photo removed from pool successfully',
+                    isInPool: addToPool,
                 });
-                return;
+            } catch (error) {
+                console.error('Toggle photo pool error:', error);
+                res.status(500).json({ error: { message: 'Failed to toggle photo pool status' } });
             }
-
-            const currentPoolImageIds = userData.poolImageIds || [];
-            const isCurrentlyInPool = currentPoolImageIds.includes(imageId);
-
-            if (addToPool && isCurrentlyInPool) {
-                res.status(400).json({
-                    error: { message: 'Image is already in the pool' },
-                });
-                return;
-            }
-
-            if (!addToPool && !isCurrentlyInPool) {
-                res.status(400).json({
-                    error: { message: 'Image is not in the pool' },
-                });
-                return;
-            }
-
-            // Update pool status
-            let updatedPoolImageIds: string[];
-            if (addToPool) {
-                updatedPoolImageIds = [...currentPoolImageIds, imageId];
-                console.log(`Adding image ${imageId} to pool for user ${userId}`);
-            } else {
-                updatedPoolImageIds = currentPoolImageIds.filter(id => id !== imageId);
-                console.log(`Removing image ${imageId} from pool for user ${userId}`);
-            }
-
-            // Update user document
-            await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
-                poolImageIds: updatedPoolImageIds,
-            });
-
-            res.json({
-                message: addToPool 
-                    ? 'Photo added to pool successfully' 
-                    : 'Photo removed from pool successfully',
-                isInPool: addToPool,
-            });
-        } catch (error) {
-            console.error('Toggle photo pool error:', error);
-            res.status(500).json({ error: { message: 'Failed to toggle photo pool status' } });
-        }
-    })().catch(() => {
-        // Error already handled in try-catch
-    });
-});
+        })().catch(() => {
+            // Error already handled in try-catch
+        });
+    },
+);
 
 export default router;
