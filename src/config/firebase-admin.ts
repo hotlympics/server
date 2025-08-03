@@ -1,4 +1,7 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, getApps, getApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -7,7 +10,7 @@ dotenv.config();
 // The app will use Application Default Credentials in production
 // For local development, set GOOGLE_APPLICATION_CREDENTIALS env var
 const initializeFirebaseAdmin = () => {
-    if (admin.apps.length === 0) {
+    if (getApps().length === 0) {
         const projectId = process.env.GCP_PROJECT_ID;
         console.log('Initializing Firebase Admin SDK with project ID:', projectId);
 
@@ -26,19 +29,28 @@ const initializeFirebaseAdmin = () => {
 
         const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
 
-        admin.initializeApp({
+        const app = initializeApp({
             projectId: projectId,
             storageBucket: storageBucket,
         });
+
+        return app;
     }
-    return admin;
+    return getApp();
 };
 
-const firebaseAdmin = initializeFirebaseAdmin();
+const firebaseApp = initializeFirebaseAdmin();
 
-export const auth = firebaseAdmin.auth();
-export const firestore = firebaseAdmin.firestore();
+export const auth = getAuth(firebaseApp);
+export const firestore = getFirestore(firebaseApp);
+export const storage = getStorage(firebaseApp);
 
-// Re-export admin for any other needs
-export { firebaseAdmin };
-export { firebaseAdmin as admin };
+// Re-export app for any other needs
+export { firebaseApp };
+
+// Create an admin-like object for backward compatibility
+export const admin = {
+    auth: () => auth,
+    firestore: () => firestore,
+    storage: () => storage,
+};

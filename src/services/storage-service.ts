@@ -1,8 +1,8 @@
-import { admin } from '../config/firebase-admin.js';
+import { storage } from '../config/firebase-admin.js';
 import path from 'path';
 
 const bucketName = process.env.FIREBASE_STORAGE_BUCKET || 'hotlympics-images';
-const bucket = admin.storage().bucket(bucketName);
+const bucket = storage.bucket(bucketName);
 
 export const storageService = {
     async uploadImage(
