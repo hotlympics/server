@@ -69,7 +69,15 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --service-account=${{ env.SERVICE_ACCOUNT }} \
-            --set-env-vars="NODE_ENV=production,JWT_SECRET=${{ secrets.JWT_SECRET }},GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }},GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }},GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},FIRESTORE_DATABASE_ID=${{ secrets.FIRESTORE_DATABASE_ID }},FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }},CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}"
+            --set-env-vars="NODE_ENV=production" \
+            --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+            --set-env-vars="GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" \
+            --set-env-vars="GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            --set-env-vars="GOOGLE_REDIRECT_URI=${{ secrets.GOOGLE_REDIRECT_URI }}" \
+            --set-env-vars="GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
+            --set-env-vars="FIRESTORE_DATABASE_ID=${{ secrets.FIRESTORE_DATABASE_ID }}" \
+            --set-env-vars="FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}" \
+            --set-env-vars="CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}"
 
       # Output the deployed service URL
       - name: Output Service URL
