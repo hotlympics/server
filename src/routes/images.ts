@@ -5,6 +5,7 @@ import {
     firebaseAuthMiddleware,
     type AuthRequest,
 } from '../middleware/firebase-auth-middleware.js';
+import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
@@ -68,15 +69,33 @@ router.post(
                 return;
             }
 
+            // Check if user has gender and dateOfBirth set
+            if (user.gender === 'unknown' || !user.dateOfBirth) {
+                res.status(400).json({
+                    error: {
+                        message:
+                            'Please set your gender and date of birth in your profile before uploading images',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
             // Generate a unique imageId
             const imageId = uuidv4();
 
             // Upload to GCS with the imageId
             const { imageUrl: fileName } = await storageService.uploadImage(req.file, imageId);
 
-            // Create image data record in Firestore
+            // Create image data record in Firestore with user's gender and dateOfBirth
             // Store the filename in Firestore (not the full URL)
-            await imageDataService.createImageData(imageId, req.user.id, fileName);
+            await imageDataService.createImageData(
+                imageId,
+                req.user.id,
+                fileName,
+                user.gender,
+                user.dateOfBirth,
+            );
 
             // Add image ID to user's uploadedImageIds array
             await UserService.addUploadedImageId(req.user.id, imageId);
@@ -290,6 +309,60 @@ router.delete(
             res.status(500).json({
                 error: {
                     message: 'Failed to delete image',
+                    status: 500,
+                },
+            });
+        }
+    }),
+);
+
+router.get(
+    '/pairs/:gender',
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    optionalAuthMiddleware,
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        try {
+            const { gender } = req.params;
+
+            // Validate gender parameter
+            if (gender !== 'male' && gender !== 'female') {
+                res.status(400).json({
+                    error: {
+                        message: 'Gender must be either "male" or "female"',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            // Fetch a random pair of images matching the gender
+            const imagePair = await imageDataService.getRandomImagePair(gender);
+
+            if (!imagePair) {
+                res.status(404).json({
+                    error: {
+                        message: 'Not enough images available for comparison',
+                        status: 404,
+                    },
+                });
+                return;
+            }
+
+            // Return the image pair with URLs
+            const pairWithUrls = imagePair.map((image) => ({
+                ...image,
+                imageUrl: `/images/serve/${image.imageUrl}`,
+            }));
+
+            res.json({
+                success: true,
+                images: pairWithUrls,
+            });
+        } catch (error) {
+            console.error('Error fetching image pairs:', error);
+            res.status(500).json({
+                error: {
+                    message: 'Failed to fetch image pairs',
                     status: 500,
                 },
             });
