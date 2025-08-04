@@ -437,9 +437,14 @@ router.get('/stats', adminAuthMiddleware, (_req: AdminRequest, res: Response): v
             const imagesSnapshot = await firestore.collection(COLLECTIONS.IMAGE_DATA).get();
             const imageCount = imagesSnapshot.size;
 
-            // Get battle count
-            const battlesSnapshot = await firestore.collection(COLLECTIONS.BATTLES).get();
-            const battleCount = battlesSnapshot.size;
+            // Get battle count by summing up battles from all images
+            // Note: Each battle involves 2 images, so we divide by 2 to get unique battles
+            let totalBattleEvents = 0;
+            imagesSnapshot.docs.forEach((doc) => {
+                const data = doc.data() as ImageDataDocument;
+                totalBattleEvents += data.battles || 0;
+            });
+            const battleCount = Math.floor(totalBattleEvents / 2);
 
             // Get users by gender and count pool images
             let maleUsers = 0;
