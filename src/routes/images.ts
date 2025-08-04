@@ -487,7 +487,16 @@ router.get(
             // Generate signed URLs for direct CDN access
             const pairWithUrls = await Promise.all(
                 imagePair.map(async (image) => {
-                    const signedUrl = await storageService.getSignedUrl(image.imageUrl);
+                    let signedUrl = image.imageUrl; // Default to filename if signing fails
+                    try {
+                        signedUrl = await storageService.getSignedUrl(image.imageUrl);
+                    } catch (error) {
+                        console.error(
+                            `Failed to generate signed URL for image ${image.imageId}:`,
+                            error,
+                        );
+                        // Continue with the original filename/path
+                    }
                     return {
                         ...image,
                         imageUrl: signedUrl,
