@@ -267,15 +267,15 @@ router.post(
                             await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
                                 poolImageIds: poolImageIdsToAdd,
                             });
-                            
+
                             // Also update the inPool field in the image-data documents
-                            const poolUpdatePromises = poolImageIdsToAdd.map(imageId =>
+                            const poolUpdatePromises = poolImageIdsToAdd.map((imageId) =>
                                 firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).update({
                                     inPool: true,
-                                })
+                                }),
                             );
                             await Promise.all(poolUpdatePromises);
-                            
+
                             console.log(
                                 `Added ${poolImageIdsToAdd.length} images to pool for user ${userId}`,
                             );
