@@ -41,7 +41,15 @@ router.put('/profile', firebaseAuthMiddleware, (req: AuthRequest, res: Response)
             // Validate date of birth
             let dateOfBirthObj: Date | null = null;
             if (dateOfBirth) {
-                dateOfBirthObj = new Date(dateOfBirth);
+                // Parse date as UTC midnight to avoid timezone issues
+                if (dateOfBirth.includes('-') && dateOfBirth.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    // ISO format YYYY-MM-DD from date input
+                    const [year, month, day] = dateOfBirth.split('-').map(Number);
+                    dateOfBirthObj = new Date(Date.UTC(year, month - 1, day));
+                } else {
+                    // Fallback to default parsing for other formats
+                    dateOfBirthObj = new Date(dateOfBirth);
+                }
                 if (isNaN(dateOfBirthObj.getTime())) {
                     res.status(400).json({ error: { message: 'Invalid date of birth' } });
                     return;

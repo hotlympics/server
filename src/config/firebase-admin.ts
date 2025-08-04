@@ -29,6 +29,11 @@ const initializeFirebaseAdmin = () => {
 
         const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
 
+        // Set quota project for Application Default Credentials
+        if (projectId && !process.env.GOOGLE_CLOUD_QUOTA_PROJECT) {
+            process.env.GOOGLE_CLOUD_QUOTA_PROJECT = projectId;
+        }
+
         const app = initializeApp({
             projectId: projectId,
             storageBucket: storageBucket,
