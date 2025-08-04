@@ -69,4 +69,38 @@ export const storageService = {
 
         return url;
     },
+
+    async getSignedUploadUrl(fileName: string): Promise<{
+        uploadUrl: string;
+        downloadUrl: string;
+    }> {
+        const file = bucket.file(fileName);
+
+        // Generate a signed URL for upload without strict content type
+        const [uploadUrl] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        });
+
+        // Also generate a signed download URL
+        const [downloadUrl] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'read',
+            expires: Date.now() + 60 * 60 * 1000, // 1 hour
+        });
+
+        return { uploadUrl, downloadUrl };
+    },
+
+    async verifyImageExists(fileName: string): Promise<boolean> {
+        try {
+            const file = bucket.file(fileName);
+            const [exists] = await file.exists();
+            return exists;
+        } catch (error) {
+            console.error('Error checking if file exists:', error);
+            return false;
+        }
+    },
 };

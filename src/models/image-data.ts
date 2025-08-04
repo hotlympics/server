@@ -10,4 +10,5 @@ export interface ImageData {
     draws: number; // Number of draws
     eloScore: number; // Current Elo rating (default: 1500)
     inPool: boolean; // Whether the image is in the pool for battles
+    status?: 'pending' | 'active'; // Upload status
 }
