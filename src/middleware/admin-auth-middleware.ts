@@ -14,7 +14,7 @@ console.log('Admin credentials loaded:', {
         username: !process.env.ADMIN_USERNAME,
         password: !process.env.ADMIN_PASSWORD,
         secret: !process.env.ADMIN_JWT_SECRET,
-    }
+    },
 });
 
 export interface AdminRequest extends Request {
