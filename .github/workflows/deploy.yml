@@ -63,14 +63,13 @@ jobs:
         run: |
           cat > env-vars.yaml << EOF
           NODE_ENV: production
-          JWT_SECRET: "${{ secrets.JWT_SECRET }}"
-          GOOGLE_CLIENT_ID: "${{ secrets.GOOGLE_CLIENT_ID }}"
-          GOOGLE_CLIENT_SECRET: "${{ secrets.GOOGLE_CLIENT_SECRET }}"
-          GOOGLE_REDIRECT_URI: "${{ secrets.GOOGLE_REDIRECT_URI }}"
           GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
           FIRESTORE_DATABASE_ID: "${{ secrets.FIRESTORE_DATABASE_ID }}"
           FIREBASE_STORAGE_BUCKET: "${{ secrets.FIREBASE_STORAGE_BUCKET }}"
           CORS_ORIGINS: "${{ secrets.CORS_ORIGINS }}"
+          ADMIN_USERNAME: "${{ secrets.ADMIN_USERNAME }}"
+          ADMIN_PASSWORD: "${{ secrets.ADMIN_PASSWORD }}"
+          ADMIN_JWT_SECRET: "${{ secrets.ADMIN_JWT_SECRET }}"
           EOF
 
       # Deploy to Cloud Run with environment variables
