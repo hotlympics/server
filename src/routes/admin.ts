@@ -72,6 +72,10 @@ router.post('/login', (req, res: Response): void => {
             expectedPassword: '***',
             usernameMatch: username === adminCredentials.username,
             passwordMatch: password === adminCredentials.password,
+            providedPasswordLength: password?.length,
+            expectedPasswordLength: adminCredentials.password?.length,
+            providedPasswordBytes: Buffer.from(password || '', 'utf8').toString('hex'),
+            expectedPasswordBytes: Buffer.from(adminCredentials.password || '', 'utf8').toString('hex'),
         });
 
         if (username !== adminCredentials.username || password !== adminCredentials.password) {
