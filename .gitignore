@@ -119,6 +119,10 @@ dist
 # Firebase cache directory
 .firebase/
 
+# Service account keys (sensitive credentials)
+*service-account*.json
+hotlympics-service-account.json
+
 # TernJS port file
 .tern-port
 

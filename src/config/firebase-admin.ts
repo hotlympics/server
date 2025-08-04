@@ -1,4 +1,5 @@
-import { initializeApp, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, getApps, getApp, type AppOptions } from 'firebase-admin/app';
+import { cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
@@ -19,23 +20,25 @@ const initializeFirebaseAdmin = () => {
         }
 
         const credentialsPath = process.env.FIREBASE_SERVICE_ACCOUNT;
-        if (credentialsPath) {
-            console.log('Using service account credentials from:', credentialsPath);
-        } else {
-            console.log('No FIREBASE_SERVICE_ACCOUNT set, using Application Default Credentials');
-        }
-
         const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
 
-        // Set quota project for Application Default Credentials
-        if (projectId && !process.env.GOOGLE_CLOUD_QUOTA_PROJECT) {
-            process.env.GOOGLE_CLOUD_QUOTA_PROJECT = projectId;
-        }
-
-        const app = initializeApp({
+        const appConfig: AppOptions = {
             projectId: projectId,
             storageBucket: storageBucket,
-        });
+        };
+
+        if (credentialsPath) {
+            console.log('Using service account credentials from:', credentialsPath);
+            appConfig.credential = cert(credentialsPath);
+        } else {
+            console.log('No FIREBASE_SERVICE_ACCOUNT set, using Application Default Credentials');
+            // Set quota project for Application Default Credentials
+            if (projectId && !process.env.GOOGLE_CLOUD_QUOTA_PROJECT) {
+                process.env.GOOGLE_CLOUD_QUOTA_PROJECT = projectId;
+            }
+        }
+
+        const app = initializeApp(appConfig);
 
         return app;
     }
