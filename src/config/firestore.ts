@@ -2,7 +2,7 @@ import { Firestore } from '@google-cloud/firestore';
 
 // Initialize Firestore with specific database
 // In production (Cloud Run), this will use the default service account
-// In development, you'll need to set GOOGLE_APPLICATION_CREDENTIALS
+// In development, you'll need to set FIREBASE_SERVICE_ACCOUNT
 export const firestore = new Firestore({
     projectId: process.env.GCP_PROJECT_ID,
     databaseId: process.env.FIRESTORE_DATABASE_ID,
