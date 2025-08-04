@@ -322,14 +322,31 @@ router.get('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Respo
                 .where('userId', '==', userId)
                 .get();
 
-            const imageData = imageDataSnapshot.docs.map((doc) => {
-                const data = doc.data() as ImageDataDocument;
-                return {
-                    id: doc.id,
-                    ...data,
-                    dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate().toISOString() : null,
-                };
-            });
+            const imageData = await Promise.all(
+                imageDataSnapshot.docs.map(async (doc) => {
+                    const data = doc.data() as ImageDataDocument;
+
+                    // Generate signed URL for the image
+                    let signedUrl = data.imageUrl; // Default to filename if signing fails
+                    try {
+                        signedUrl = await storageService.getSignedUrl(data.imageUrl);
+                    } catch (error) {
+                        console.error(
+                            `Failed to generate signed URL for image ${data.imageId}:`,
+                            error,
+                        );
+                    }
+
+                    return {
+                        id: doc.id,
+                        ...data,
+                        imageUrl: signedUrl,
+                        dateOfBirth: data.dateOfBirth
+                            ? data.dateOfBirth.toDate().toISOString()
+                            : null,
+                    };
+                }),
+            );
 
             res.json({
                 user: {

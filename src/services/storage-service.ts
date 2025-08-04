@@ -46,27 +46,6 @@ export const storageService = {
         await bucket.file(fileName).delete();
     },
 
-    async getImageStream(fileName: string): Promise<NodeJS.ReadableStream> {
-        const file = bucket.file(fileName);
-        const [exists] = await file.exists();
-
-        if (!exists) {
-            throw new Error('Image not found');
-        }
-
-        return file.createReadStream();
-    },
-
-    async getImageMetadata(fileName: string): Promise<{ contentType: string; size: number }> {
-        const file = bucket.file(fileName);
-        const [metadata] = await file.getMetadata();
-
-        return {
-            contentType: metadata.contentType || 'image/jpeg',
-            size: parseInt(metadata.size as string, 10),
-        };
-    },
-
     async findImageByIdPrefix(imageId: string): Promise<string | null> {
         const [files] = await bucket.getFiles({ prefix: imageId });
 
@@ -76,5 +55,52 @@ export const storageService = {
 
         // Return the first matching file name
         return files[0].name;
+    },
+
+    async getSignedUrl(fileName: string): Promise<string> {
+        const file = bucket.file(fileName);
+
+        // Generate a signed URL that expires in 1 hour
+        const [url] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'read',
+            expires: Date.now() + 60 * 60 * 1000, // 1 hour from now
+        });
+
+        return url;
+    },
+
+    async getSignedUploadUrl(fileName: string): Promise<{
+        uploadUrl: string;
+        downloadUrl: string;
+    }> {
+        const file = bucket.file(fileName);
+
+        // Generate a signed URL for upload without strict content type
+        const [uploadUrl] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'write',
+            expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+        });
+
+        // Also generate a signed download URL
+        const [downloadUrl] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'read',
+            expires: Date.now() + 60 * 60 * 1000, // 1 hour
+        });
+
+        return { uploadUrl, downloadUrl };
+    },
+
+    async verifyImageExists(fileName: string): Promise<boolean> {
+        try {
+            const file = bucket.file(fileName);
+            const [exists] = await file.exists();
+            return exists;
+        } catch (error) {
+            console.error('Error checking if file exists:', error);
+            return false;
+        }
     },
 };

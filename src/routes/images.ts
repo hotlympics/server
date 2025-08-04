@@ -20,6 +20,100 @@ const asyncHandler =
     };
 
 router.post(
+    '/request-upload',
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        try {
+            if (!req.user?.id) {
+                res.status(401).json({
+                    error: {
+                        message: 'User not authenticated',
+                        status: 401,
+                    },
+                });
+                return;
+            }
+
+            // Get file extension from request body
+            const { fileExtension = 'jpg' } = req.body as { fileExtension?: string };
+
+            // Check user's current photo count from user document
+            const user = await UserService.getUserById(req.user.id);
+            if (!user) {
+                res.status(404).json({
+                    error: {
+                        message: 'User not found',
+                        status: 404,
+                    },
+                });
+                return;
+            }
+
+            // Check if user has less than 10 images
+            if (user.uploadedImageIds.length >= 10) {
+                res.status(400).json({
+                    error: {
+                        message: "You've reached the maximum limit of 10 photos",
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            // Check if user has gender and dateOfBirth set
+            if (user.gender === 'unknown' || !user.dateOfBirth) {
+                res.status(400).json({
+                    error: {
+                        message:
+                            'Please set your gender and date of birth in your profile before uploading images',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            // Generate a unique imageId
+            const imageId = uuidv4();
+            const fileName = `${imageId}.${fileExtension}`;
+
+            // Pre-create image data record with pending status
+            await imageDataService.createImageData(
+                imageId,
+                req.user.id,
+                fileName,
+                user.gender,
+                user.dateOfBirth,
+                { status: 'pending' },
+            );
+
+            // Add image ID to user's uploadedImageIds array
+            await UserService.addUploadedImageId(req.user.id, imageId);
+
+            // Generate signed upload URL
+            const { uploadUrl, downloadUrl } = await storageService.getSignedUploadUrl(fileName);
+
+            res.json({
+                success: true,
+                imageId: imageId,
+                uploadUrl: uploadUrl,
+                downloadUrl: downloadUrl,
+                fileName: fileName,
+                message: 'Upload URL generated successfully',
+            });
+        } catch (error) {
+            console.error('Upload URL generation error:', error);
+            res.status(500).json({
+                error: {
+                    message: 'Failed to generate upload URL',
+                    status: 500,
+                },
+            });
+        }
+    }),
+);
+
+router.post(
     '/upload',
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     firebaseAuthMiddleware,
@@ -100,12 +194,13 @@ router.post(
             // Add image ID to user's uploadedImageIds array
             await UserService.addUploadedImageId(req.user.id, imageId);
 
-            const responseUrl = `/images/serve/${fileName}`;
+            // Generate signed URL for the uploaded image
+            const signedUrl = await storageService.getSignedUrl(fileName);
 
             res.json({
                 success: true,
                 imageId: imageId,
-                imageUrl: responseUrl,
+                imageUrl: signedUrl,
                 message: 'Image uploaded successfully',
             });
         } catch (error) {
@@ -148,85 +243,43 @@ router.get(
                 return;
             }
 
-            // Map image IDs directly to URLs
-            // Since we don't have upload dates without image-stats, we'll return them in the order they appear in the array
-            // (which should be in upload order since we use arrayUnion)
-            const userImages = user.uploadedImageIds.map((imageId) => {
-                // We need to check which file exists in storage since we don't know the extension
-                // For now, we'll construct the URL pattern that the serve endpoint will handle
-                return {
-                    id: imageId,
-                    url: `/images/serve/${imageId}`,
-                };
-            });
+            // Map image IDs to signed URLs
+            const userImages = await Promise.all(
+                user.uploadedImageIds.map(async (imageId) => {
+                    try {
+                        // Find the actual filename with extension
+                        const fileName = await storageService.findImageByIdPrefix(imageId);
+                        if (!fileName) {
+                            return null;
+                        }
+
+                        // Generate signed URL
+                        const signedUrl = await storageService.getSignedUrl(fileName);
+                        return {
+                            id: imageId,
+                            url: signedUrl,
+                        };
+                    } catch (error) {
+                        console.error(`Failed to generate signed URL for image ${imageId}:`, error);
+                        return null;
+                    }
+                }),
+            );
+
+            // Filter out any null results
+            const validUserImages = userImages.filter((img) => img !== null) as Array<{
+                id: string;
+                url: string;
+            }>;
 
             // Return in reverse order (newest first) based on array position
-            res.json(userImages.reverse());
+            res.json(validUserImages.reverse());
         } catch (error) {
             console.error('Error fetching user images:', error);
             res.status(500).json({
                 error: {
                     message: 'Failed to fetch user images',
                     status: 500,
-                },
-            });
-        }
-    }),
-);
-
-router.get(
-    '/serve/:fileName',
-    asyncHandler(async (req: Request, res: Response) => {
-        try {
-            let { fileName } = req.params;
-
-            // Check if fileName looks like an imageId (UUID without extension)
-            const isImageId =
-                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fileName);
-
-            if (isImageId) {
-                // Try to find the actual filename with extension
-                const actualFileName = await storageService.findImageByIdPrefix(fileName);
-                if (!actualFileName) {
-                    res.status(404).json({
-                        error: {
-                            message: 'Image not found',
-                            status: 404,
-                        },
-                    });
-                    return;
-                }
-                fileName = actualFileName;
-            }
-
-            // Get image metadata first
-            const metadata = await storageService.getImageMetadata(fileName);
-
-            // Set proper headers
-            res.setHeader('Content-Type', metadata.contentType);
-            res.setHeader('Content-Length', metadata.size.toString());
-            res.setHeader('Cache-Control', 'no-store'); // Don't cache at all
-            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // Allow cross-origin image loading
-
-            // Stream the image
-            const stream = await storageService.getImageStream(fileName);
-
-            stream.on('error', (err) => {
-                console.error('Stream error:', err);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        error: { message: 'Failed to stream image', status: 500 },
-                    });
-                }
-            });
-
-            stream.pipe(res);
-        } catch (error) {
-            // Return 404 for missing images
-            res.status(404).json({
-                error: {
-                    message: 'Image not found',
-                    status: 404,
                 },
             });
         }
@@ -316,6 +369,89 @@ router.delete(
     }),
 );
 
+router.post(
+    '/confirm-upload/:imageId',
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        try {
+            const { imageId } = req.params;
+            let { actualFileName } = req.body as { actualFileName: string };
+
+            if (!req.user?.id) {
+                res.status(401).json({
+                    error: {
+                        message: 'User not authenticated',
+                        status: 401,
+                    },
+                });
+                return;
+            }
+
+            // Verify the user owns this image
+            const user = await UserService.getUserById(req.user.id);
+            if (!user || !user.uploadedImageIds.includes(imageId)) {
+                res.status(403).json({
+                    error: {
+                        message: 'Unauthorized to confirm this upload',
+                        status: 403,
+                    },
+                });
+                return;
+            }
+
+            // Verify image exists in storage
+            console.log('Verifying upload for file:', actualFileName);
+            const exists = await storageService.verifyImageExists(actualFileName);
+
+            if (!exists) {
+                console.log('File not found in storage:', actualFileName);
+                console.log('Checking for file with imageId prefix:', imageId);
+
+                // Try to find the file by prefix in case extension differs
+                const foundFile = await storageService.findImageByIdPrefix(imageId);
+                if (foundFile) {
+                    console.log('Found file with different name:', foundFile);
+                    // Update with correct filename
+                    actualFileName = foundFile;
+                } else {
+                    // Rollback: Remove from user's array and delete record
+                    await UserService.removeUploadedImageId(req.user.id, imageId);
+                    await firestore.collection('image-data').doc(imageId).delete();
+
+                    res.status(400).json({
+                        error: {
+                            message: 'Upload verification failed',
+                            status: 400,
+                        },
+                    });
+                    return;
+                }
+            }
+
+            // Update image record status
+            await imageDataService.updateImageStatus(imageId, {
+                status: 'active',
+                fileName: actualFileName,
+                uploadedAt: new Date(),
+            });
+
+            res.json({
+                success: true,
+                message: 'Upload confirmed successfully',
+            });
+        } catch (error) {
+            console.error('Upload confirmation error:', error);
+            res.status(500).json({
+                error: {
+                    message: 'Failed to confirm upload',
+                    status: 500,
+                },
+            });
+        }
+    }),
+);
+
 router.get(
     '/pairs/:gender',
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
@@ -348,18 +484,25 @@ router.get(
                 return;
             }
 
-            // Return the image pair with URLs
-            const pairWithUrls = imagePair.map((image) => ({
-                ...image,
-                imageUrl: `/images/serve/${image.imageUrl}`,
-            }));
+            // Generate signed URLs for direct CDN access
+            const pairWithUrls = await Promise.all(
+                imagePair.map(async (image) => {
+                    const signedUrl = await storageService.getSignedUrl(image.imageUrl);
+                    return {
+                        ...image,
+                        imageUrl: signedUrl,
+                    };
+                }),
+            );
 
             res.json({
                 success: true,
                 images: pairWithUrls,
+                timestamp: new Date().toISOString(),
             });
         } catch (error) {
             console.error('Error fetching image pairs:', error);
+
             res.status(500).json({
                 error: {
                     message: 'Failed to fetch image pairs',

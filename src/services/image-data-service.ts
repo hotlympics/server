@@ -11,6 +11,7 @@ export class ImageDataService {
         imageUrl: string,
         gender: 'male' | 'female',
         dateOfBirth: Date,
+        options?: { status?: 'pending' | 'active' },
     ): Promise<ImageData> {
         const stats: ImageData = {
             imageId,
@@ -24,12 +25,14 @@ export class ImageDataService {
             draws: 0,
             eloScore: 1500,
             inPool: false,
+            status: options?.status || 'active',
         };
 
         // Convert Date to Firestore Timestamp for storage
         const documentData = {
             ...stats,
             dateOfBirth: Timestamp.fromDate(dateOfBirth),
+            createdAt: Timestamp.now(),
         };
 
         await firestore.collection(COLLECTION_NAME).doc(imageId).set(documentData);
@@ -154,6 +157,49 @@ export class ImageDataService {
         updates: { battles: number; wins?: number; losses?: number; eloScore: number },
     ): Promise<void> {
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updates);
+    }
+
+    async updateImageStatus(
+        imageId: string,
+        updates: { status: 'pending' | 'active'; fileName?: string; uploadedAt?: Date },
+    ): Promise<void> {
+        const updateData: Record<string, unknown> = { status: updates.status };
+        if (updates.fileName) {
+            updateData.imageUrl = updates.fileName;
+        }
+        if (updates.uploadedAt) {
+            updateData.uploadedAt = Timestamp.fromDate(updates.uploadedAt);
+        }
+        await firestore.collection(COLLECTION_NAME).doc(imageId).update(updateData);
+    }
+
+    async getPendingUploads(olderThanMinutes: number): Promise<ImageData[]> {
+        const cutoffTime = new Date();
+        cutoffTime.setMinutes(cutoffTime.getMinutes() - olderThanMinutes);
+
+        const snapshot = await firestore
+            .collection(COLLECTION_NAME)
+            .where('status', '==', 'pending')
+            .where('createdAt', '<', Timestamp.fromDate(cutoffTime))
+            .get();
+
+        return snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                imageId: data.imageId as string,
+                userId: data.userId as string,
+                imageUrl: data.imageUrl as string,
+                gender: data.gender as 'male' | 'female',
+                dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
+                battles: data.battles as number,
+                wins: data.wins as number,
+                losses: data.losses as number,
+                draws: data.draws as number,
+                eloScore: data.eloScore as number,
+                inPool: data.inPool as boolean,
+                status: data.status as 'pending' | 'active',
+            };
+        });
     }
 }
 
