@@ -5,18 +5,6 @@ const ADMIN_SECRET = process.env.ADMIN_JWT_SECRET || 'default-admin-secret-chang
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-// Debug logging for environment variables at startup
-console.log('Admin credentials loaded:', {
-    username: ADMIN_USERNAME,
-    passwordSet: !!process.env.ADMIN_PASSWORD,
-    secretSet: !!process.env.ADMIN_JWT_SECRET,
-    usingDefaults: {
-        username: !process.env.ADMIN_USERNAME,
-        password: !process.env.ADMIN_PASSWORD,
-        secret: !process.env.ADMIN_JWT_SECRET,
-    },
-});
-
 export interface AdminRequest extends Request {
     isAdmin?: boolean;
 }
