@@ -75,7 +75,9 @@ router.post('/login', (req, res: Response): void => {
             providedPasswordLength: password?.length,
             expectedPasswordLength: adminCredentials.password?.length,
             providedPasswordBytes: Buffer.from(password || '', 'utf8').toString('hex'),
-            expectedPasswordBytes: Buffer.from(adminCredentials.password || '', 'utf8').toString('hex'),
+            expectedPasswordBytes: Buffer.from(adminCredentials.password || '', 'utf8').toString(
+                'hex',
+            ),
         });
 
         if (username !== adminCredentials.username || password !== adminCredentials.password) {
@@ -619,6 +621,11 @@ router.put(
                 // Update user document
                 await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
                     poolImageIds: updatedPoolImageIds,
+                });
+
+                // Also update the inPool field in the image-data document
+                await firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).update({
+                    inPool: addToPool,
                 });
 
                 res.json({
