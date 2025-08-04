@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, getApps, getApp, type AppOptions } from 'firebase-admin/app';
 import { cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -22,7 +22,7 @@ const initializeFirebaseAdmin = () => {
         const credentialsPath = process.env.FIREBASE_SERVICE_ACCOUNT;
         const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
 
-        let appConfig: any = {
+        const appConfig: AppOptions = {
             projectId: projectId,
             storageBucket: storageBucket,
         };
