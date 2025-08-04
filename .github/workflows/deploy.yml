@@ -58,6 +58,11 @@ jobs:
           echo "SERVICE_ACCOUNT=$SERVICE_ACCOUNT" >> $GITHUB_ENV
           echo "Using service account: $SERVICE_ACCOUNT"
 
+      # Create service account credentials file
+      - name: Create service account file
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > firebase-service-account.json
+          
       # Create environment variables file
       - name: Create env vars file
         run: |
@@ -70,12 +75,17 @@ jobs:
           ADMIN_USERNAME: "${{ secrets.ADMIN_USERNAME }}"
           ADMIN_PASSWORD: "${{ secrets.ADMIN_PASSWORD }}"
           ADMIN_JWT_SECRET: "${{ secrets.ADMIN_JWT_SECRET }}"
-          FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+          FIREBASE_SERVICE_ACCOUNT: "/app/firebase-service-account.json"
           EOF
 
-      # Deploy to Cloud Run with environment variables
+      # Deploy to Cloud Run with environment variables and mount the service account file
       - name: Deploy to Cloud Run
         run: |
+          # First create a secret for the service account file
+          gcloud secrets create firebase-service-account --data-file=firebase-service-account.json --project=${{ env.PROJECT_ID }} || \
+          gcloud secrets versions add firebase-service-account --data-file=firebase-service-account.json --project=${{ env.PROJECT_ID }}
+          
+          # Deploy with the secret mounted
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ env.IMAGE_TAG }} \
             --platform managed \
@@ -84,7 +94,8 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --service-account=${{ env.SERVICE_ACCOUNT }} \
-            --env-vars-file=env-vars.yaml
+            --env-vars-file=env-vars.yaml \
+            --update-secrets=/app/firebase-service-account.json=firebase-service-account:latest
 
       # Output the deployed service URL
       - name: Output Service URL
