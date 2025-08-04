@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm run:*)",
-      "Bash(./run-checks.sh:*)"
+      "Bash(./run-checks.sh:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

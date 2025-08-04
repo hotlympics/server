@@ -407,7 +407,7 @@ router.post(
             if (!exists) {
                 console.log('File not found in storage:', actualFileName);
                 console.log('Checking for file with imageId prefix:', imageId);
-                
+
                 // Try to find the file by prefix in case extension differs
                 const foundFile = await storageService.findImageByIdPrefix(imageId);
                 if (foundFile) {
