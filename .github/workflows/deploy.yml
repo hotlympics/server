@@ -70,7 +70,6 @@ jobs:
           ADMIN_USERNAME: "${{ secrets.ADMIN_USERNAME }}"
           ADMIN_PASSWORD: "${{ secrets.ADMIN_PASSWORD }}"
           ADMIN_JWT_SECRET: "${{ secrets.ADMIN_JWT_SECRET }}"
-          FIREBASE_SERVICE_ACCOUNT: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
           EOF
 
       # Deploy to Cloud Run with environment variables
