@@ -8,7 +8,7 @@ dotenv.config();
 
 // Initialize Firebase Admin SDK
 // The app will use Application Default Credentials in production
-// For local development, set GOOGLE_APPLICATION_CREDENTIALS env var
+// For local development, set FIREBASE_SERVICE_ACCOUNT env var
 const initializeFirebaseAdmin = () => {
     if (getApps().length === 0) {
         const projectId = process.env.GCP_PROJECT_ID;
@@ -18,13 +18,11 @@ const initializeFirebaseAdmin = () => {
             console.error('WARNING: GCP_PROJECT_ID environment variable is not set');
         }
 
-        const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        const credentialsPath = process.env.FIREBASE_SERVICE_ACCOUNT;
         if (credentialsPath) {
             console.log('Using service account credentials from:', credentialsPath);
         } else {
-            console.log(
-                'No GOOGLE_APPLICATION_CREDENTIALS set, using Application Default Credentials',
-            );
+            console.log('No FIREBASE_SERVICE_ACCOUNT set, using Application Default Credentials');
         }
 
         const storageBucket = process.env.FIREBASE_STORAGE_BUCKET;
