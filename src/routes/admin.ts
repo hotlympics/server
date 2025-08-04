@@ -64,11 +64,23 @@ router.post('/login', (req, res: Response): void => {
     try {
         const { username, password } = req.body as { username: string; password: string };
 
+        // Debug logging for troubleshooting
+        console.log('Admin login attempt:', {
+            providedUsername: username,
+            providedPassword: '***',
+            expectedUsername: adminCredentials.username,
+            expectedPassword: '***',
+            usernameMatch: username === adminCredentials.username,
+            passwordMatch: password === adminCredentials.password,
+        });
+
         if (username !== adminCredentials.username || password !== adminCredentials.password) {
+            console.log('Admin login failed: Invalid credentials');
             res.status(401).json({ error: { message: 'Invalid admin credentials' } });
             return;
         }
 
+        console.log('Admin login successful');
         const token = jwt.sign({ isAdmin: true }, adminCredentials.secret, { expiresIn: '24h' });
         res.json({ token });
     } catch (error) {

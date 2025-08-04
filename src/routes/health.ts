@@ -20,6 +20,13 @@ router.get('/', (_req: Request, res: Response) => {
         },
         version: process.env.npm_package_version || '0.0.0',
         environment: process.env.NODE_ENV || 'development',
+        admin: {
+            usernameSet: !!process.env.ADMIN_USERNAME,
+            passwordSet: !!process.env.ADMIN_PASSWORD,
+            secretSet: !!process.env.ADMIN_JWT_SECRET,
+            usernameLength: process.env.ADMIN_USERNAME?.length || 0,
+            passwordLength: process.env.ADMIN_PASSWORD?.length || 0,
+        },
     });
 });
 
