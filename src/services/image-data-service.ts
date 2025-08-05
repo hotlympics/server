@@ -24,6 +24,7 @@ export class ImageDataService {
             losses: 0,
             draws: 0,
             eloScore: 1500,
+            reactions: {},
             inPool: false,
             status: options?.status || 'active',
         };
@@ -62,6 +63,7 @@ export class ImageDataService {
             losses: data.losses as number,
             draws: data.draws as number,
             eloScore: data.eloScore as number,
+            reactions: data.reactions as Record<string, number>,
             inPool: data.inPool as boolean,
         };
     }
@@ -109,6 +111,7 @@ export class ImageDataService {
                 losses: data.losses as number,
                 draws: data.draws as number,
                 eloScore: data.eloScore as number,
+                reactions: data.reactions as Record<string, number>,
                 inPool: data.inPool as boolean,
             };
         });
@@ -151,12 +154,20 @@ export class ImageDataService {
 
         return [firstImage, secondImage];
     }
-
     async updateRating(
         imageId: string,
-        updates: { battles: number; wins?: number; losses?: number; eloScore: number },
+        updates: {
+            battles?: number;
+            wins?: number;
+            losses?: number;
+            eloScore?: number;
+        },
     ): Promise<void> {
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updates);
+    }
+
+    async updateReactions(imageId: string, reactions: Record<string, number>): Promise<void> {
+        await firestore.collection(COLLECTION_NAME).doc(imageId).update({ reactions });
     }
 
     async updateImageStatus(
@@ -196,6 +207,7 @@ export class ImageDataService {
                 losses: data.losses as number,
                 draws: data.draws as number,
                 eloScore: data.eloScore as number,
+                reactions: data.reactions as Record<string, number>,
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active',
             };
