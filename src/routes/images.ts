@@ -453,40 +453,65 @@ router.post(
 );
 
 router.get(
-    '/pairs/:gender',
+    '/block',
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     optionalAuthMiddleware,
     asyncHandler(async (req: AuthRequest, res: Response) => {
         try {
-            const { gender } = req.params;
+            const { gender, count } = req.query as { gender?: string; count?: string };
 
-            // Validate gender parameter
-            if (gender !== 'male' && gender !== 'female') {
+            if (!count) {
                 res.status(400).json({
                     error: {
-                        message: 'Gender must be either "male" or "female"',
+                        message: 'Count parameter is required',
                         status: 400,
                     },
                 });
                 return;
             }
 
-            // Fetch a random pair of images matching the gender
-            const imagePair = await imageDataService.getRandomImagePair(gender);
+            const imageCount = parseInt(count, 10);
+            if (isNaN(imageCount) || imageCount < 1 || imageCount > 100) {
+                res.status(400).json({
+                    error: {
+                        message: 'count must be a number between 1 and 100',
+                        status: 400,
+                    },
+                });
+                return;
+            }
 
-            if (!imagePair) {
+            const criteria: { gender?: 'male' | 'female' } = {};
+
+            if (gender) {
+                if (gender !== 'male' && gender !== 'female') {
+                    res.status(400).json({
+                        error: {
+                            message: 'Gender must be either "male" or "female"',
+                            status: 400,
+                        },
+                    });
+                    return;
+                }
+                criteria.gender = gender;
+            }
+
+            // Fetch random images with specified criteria
+            const images = await imageDataService.getRandomImages(imageCount, criteria);
+
+            if (!images) {
                 res.status(404).json({
                     error: {
-                        message: 'Not enough images available for comparison',
+                        message:
+                            'Not enough images with all criteria met were found to fulfill request',
                         status: 404,
                     },
                 });
                 return;
             }
 
-            // Generate signed URLs for direct CDN access
-            const pairWithUrls = await Promise.all(
-                imagePair.map(async (image) => {
+            const imagesWithUrls = await Promise.all(
+                images.map(async (image) => {
                     let signedUrl = image.imageUrl; // Default to filename if signing fails
                     try {
                         signedUrl = await storageService.getSignedUrl(image.imageUrl);
@@ -506,7 +531,7 @@ router.get(
 
             res.json({
                 success: true,
-                images: pairWithUrls,
+                images: imagesWithUrls,
                 timestamp: new Date().toISOString(),
             });
         } catch (error) {

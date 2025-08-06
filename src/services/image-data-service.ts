@@ -83,15 +83,22 @@ export class ImageDataService {
         await batch.commit();
     }
 
-    async getRandomImagePair(gender: 'male' | 'female'): Promise<ImageData[] | null> {
-        // Query for images that are in the pool and match the gender
-        const snapshot = await firestore
-            .collection(COLLECTION_NAME)
-            .where('inPool', '==', true)
-            .where('gender', '==', gender)
-            .get();
+    async getRandomImages(
+        count: number,
+        criteria: {
+            gender?: 'male' | 'female';
+        },
+    ): Promise<ImageData[] | null> {
+        // Build the query based on criteria
+        let query: FirebaseFirestore.Query = firestore.collection(COLLECTION_NAME);
 
-        if (snapshot.empty || snapshot.size < 2) {
+        if (criteria.gender !== undefined) {
+            query = query.where('gender', '==', criteria.gender);
+        }
+
+        const snapshot = await query.get();
+
+        if (snapshot.empty || snapshot.size < count) {
             return null;
         }
 
@@ -110,46 +117,53 @@ export class ImageDataService {
                 draws: data.draws as number,
                 eloScore: data.eloScore as number,
                 inPool: data.inPool as boolean,
+                status: data.status as 'pending' | 'active' | undefined,
             };
         });
 
         // Group images by userId
         const imagesByUser = new Map<string, ImageData[]>();
-        images.forEach((image) => {
+        images.forEach((image: ImageData) => {
             const userImages = imagesByUser.get(image.userId) || [];
             userImages.push(image);
             imagesByUser.set(image.userId, userImages);
         });
 
-        // If we don't have at least 2 different users, we can't create a valid pair
-        if (imagesByUser.size < 2) {
+        // Log the maximum possible count (number of unique users)
+        const maxPossibleCount = imagesByUser.size;
+        console.log(
+            `[getRandomImages] Max possible count (unique users): ${maxPossibleCount}, Requested: ${count}, Criteria: ${JSON.stringify(criteria)}`,
+        );
+
+        // If we don't have enough different users with images which meet the criteria,
+        // we can't fulfill the request
+        if (imagesByUser.size < count) {
             return null;
         }
 
-        // Convert to array of users for easier random selection
         const users = Array.from(imagesByUser.keys());
+        const selectedImages: ImageData[] = [];
+        const selectedUserIndices = new Set<number>();
 
-        // Randomly select two different users
-        const firstUserIndex = Math.floor(Math.random() * users.length);
-        let secondUserIndex = Math.floor(Math.random() * users.length);
+        // Select images from different users
+        while (selectedImages.length < count) {
+            let userIndex = Math.floor(Math.random() * users.length);
 
-        // Ensure we pick a different user
-        while (secondUserIndex === firstUserIndex) {
-            secondUserIndex = Math.floor(Math.random() * users.length);
+            // Find a user we haven't selected yet
+            while (selectedUserIndices.has(userIndex)) {
+                userIndex = Math.floor(Math.random() * users.length);
+            }
+
+            selectedUserIndices.add(userIndex);
+            const userId = users[userIndex];
+            const userImages = imagesByUser.get(userId)!;
+
+            // Randomly select one image from this user
+            const image = userImages[Math.floor(Math.random() * userImages.length)];
+            selectedImages.push(image);
         }
 
-        const firstUserId = users[firstUserIndex];
-        const secondUserId = users[secondUserIndex];
-
-        // Get images from each user
-        const firstUserImages = imagesByUser.get(firstUserId)!;
-        const secondUserImages = imagesByUser.get(secondUserId)!;
-
-        // Randomly select one image from each user
-        const firstImage = firstUserImages[Math.floor(Math.random() * firstUserImages.length)];
-        const secondImage = secondUserImages[Math.floor(Math.random() * secondUserImages.length)];
-
-        return [firstImage, secondImage];
+        return selectedImages;
     }
 
     async updateRating(
