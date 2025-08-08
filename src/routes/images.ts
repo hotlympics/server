@@ -547,4 +547,112 @@ router.get(
     }),
 );
 
+router.get(
+    '/leaderboard',
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    optionalAuthMiddleware,
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        try {
+            const { type, gender, count } = req.query as {
+                type?: string;
+                gender?: string;
+                count?: string;
+            };
+
+            // Validate type parameter
+            if (!type || (type !== 'top' && type !== 'bottom')) {
+                res.status(400).json({
+                    error: {
+                        message: 'Type parameter is required and must be either "top" or "bottom"',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            // Validate count parameter
+            if (!count) {
+                res.status(400).json({
+                    error: {
+                        message: 'Count parameter is required',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            const imageCount = parseInt(count, 10);
+            if (isNaN(imageCount) || imageCount < 1 || imageCount > 100) {
+                res.status(400).json({
+                    error: {
+                        message: 'Count must be a number between 1 and 100',
+                        status: 400,
+                    },
+                });
+                return;
+            }
+
+            // Validate gender parameter if provided
+            const criteria: { gender?: 'male' | 'female' } = {};
+            if (gender) {
+                if (gender !== 'male' && gender !== 'female') {
+                    res.status(400).json({
+                        error: {
+                            message: 'Gender must be either "male" or "female"',
+                            status: 400,
+                        },
+                    });
+                    return;
+                }
+                criteria.gender = gender;
+            }
+
+            // Fetch leaderboard data
+            const images = await imageDataService.getLeaderboard(
+                type as 'top' | 'bottom',
+                imageCount,
+                criteria,
+            );
+
+            // Generate signed URLs for the images
+            const imagesWithUrls = await Promise.all(
+                images.map(async (image) => {
+                    let signedUrl = image.imageUrl; // Default to filename if signing fails
+                    try {
+                        signedUrl = await storageService.getSignedUrl(image.imageUrl);
+                    } catch (error) {
+                        console.error(
+                            `Failed to generate signed URL for image ${image.imageId}:`,
+                            error,
+                        );
+                        // Continue with the original filename/path
+                    }
+                    return {
+                        ...image,
+                        imageUrl: signedUrl,
+                    };
+                }),
+            );
+
+            res.json({
+                success: true,
+                type,
+                count: images.length,
+                criteria,
+                images: imagesWithUrls,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            console.error('Error fetching leaderboard:', error);
+
+            res.status(500).json({
+                error: {
+                    message: 'Failed to fetch leaderboard',
+                    status: 500,
+                },
+            });
+        }
+    }),
+);
+
 export default router;

@@ -1,4 +1,69 @@
 {
-  "indexes": [],
-  "fieldOverrides": []
+    "indexes": [
+        {
+            "collectionGroup": "image-data",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inPool",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "eloScore",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "image-data",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inPool",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "eloScore",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "image-data",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inPool",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "gender",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "eloScore",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "image-data",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "inPool",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "gender",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "eloScore",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
 }
