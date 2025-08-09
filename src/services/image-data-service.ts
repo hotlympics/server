@@ -217,6 +217,46 @@ export class ImageDataService {
             };
         });
     }
+
+    async getLeaderboard(
+        type: 'top' | 'bottom',
+        count: number,
+        criteria: {
+            gender?: 'male' | 'female';
+        },
+    ): Promise<ImageData[]> {
+        let query: FirebaseFirestore.Query = firestore
+            .collection(COLLECTION_NAME)
+            .where('inPool', '==', true); // Only include images actively in the rating pool
+
+        if (criteria.gender !== undefined) {
+            query = query.where('gender', '==', criteria.gender);
+        }
+
+        // Sort by ELO score - descending for top, ascending for bottom
+        const sortDirection = type === 'top' ? 'desc' : 'asc';
+        query = query.orderBy('eloScore', sortDirection).limit(count);
+
+        const snapshot = await query.get();
+
+        return snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                imageId: data.imageId as string,
+                userId: data.userId as string,
+                imageUrl: data.imageUrl as string,
+                gender: data.gender as 'male' | 'female',
+                dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
+                battles: data.battles as number,
+                wins: data.wins as number,
+                losses: data.losses as number,
+                draws: data.draws as number,
+                eloScore: data.eloScore as number,
+                inPool: data.inPool as boolean,
+                status: data.status as 'pending' | 'active' | undefined,
+            };
+        });
+    }
 }
 
 export const imageDataService = new ImageDataService();
