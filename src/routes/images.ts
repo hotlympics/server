@@ -608,11 +608,7 @@ router.get(
             }
 
             // Fetch leaderboard data
-            const images = await imageDataService.getLeaderboard(
-                type as 'top' | 'bottom',
-                imageCount,
-                criteria,
-            );
+            const images = await imageDataService.getLeaderboard(type, imageCount, criteria);
 
             // Generate signed URLs for the images
             const imagesWithUrls = await Promise.all(
