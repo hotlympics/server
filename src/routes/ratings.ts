@@ -5,10 +5,30 @@ import { imageDataService } from '../services/image-data-service.js';
 import { UserService } from '../services/user-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
+import { Glicko2Service } from '../services/glicko2-service.js';
+import { ImageData } from '../models/image-data.js';
 
 const router = Router();
 
 const K_FACTOR = 32;
+
+/**
+ * Ensures an ImageData object has Glicko fields, initializing them on-demand if missing
+ */
+export function ensureGlickoFields(imageData: ImageData): ImageData {
+    if (!imageData.glicko) {
+        // Initialize Glicko fields on-demand using existing battle count
+        const glickoState = Glicko2Service.initializeFromBattleCount(
+            imageData.eloScore || 1500,
+            imageData.battles || 0,
+        );
+        return {
+            ...imageData,
+            glicko: glickoState,
+        };
+    }
+    return imageData;
+}
 
 function calculateEloRating(
     winnerScore: number,
