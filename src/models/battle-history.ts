@@ -1,6 +1,5 @@
 import { Timestamp } from '@google-cloud/firestore';
 
-// New Glicko-2 optimized battle history interface
 export interface BattleHistory {
     battleId: string;
     winnerImageId: string;

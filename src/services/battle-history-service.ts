@@ -53,14 +53,12 @@ export class BattleHistoryService {
         const winnerQuery = firestore
             .collection(COLLECTION_NAME)
             .where('winnerUserId', '==', userId)
-            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
         const loserQuery = firestore
             .collection(COLLECTION_NAME)
             .where('loserUserId', '==', userId)
-            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
@@ -89,14 +87,12 @@ export class BattleHistoryService {
         const winnerQuery = firestore
             .collection(COLLECTION_NAME)
             .where('winnerImageId', '==', imageId)
-            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
         const loserQuery = firestore
             .collection(COLLECTION_NAME)
             .where('loserImageId', '==', imageId)
-            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
