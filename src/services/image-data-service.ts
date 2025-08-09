@@ -1,5 +1,5 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
-import { ImageData } from '../models/image-data.js';
+import { ImageData, GlickoState } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
@@ -62,6 +62,7 @@ export class ImageDataService {
             losses: data.losses as number,
             draws: data.draws as number,
             eloScore: data.eloScore as number,
+            glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
             inPool: data.inPool as boolean,
         };
     }
@@ -118,6 +119,7 @@ export class ImageDataService {
                 losses: data.losses as number,
                 draws: data.draws as number,
                 eloScore: data.eloScore as number,
+                glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active' | undefined,
             };
@@ -212,6 +214,7 @@ export class ImageDataService {
                 losses: data.losses as number,
                 draws: data.draws as number,
                 eloScore: data.eloScore as number,
+                glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active',
             };

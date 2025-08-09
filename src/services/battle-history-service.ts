@@ -1,5 +1,6 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { BattleHistory } from '../models/battle-history.js';
+import { GlickoState } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 
 const COLLECTION_NAME = COLLECTIONS.BATTLES;
@@ -9,20 +10,17 @@ export interface CreateBattleHistoryData {
     loserImageId: string;
     winnerUserId: string;
     loserUserId: string;
-    winnerEloChange: number;
-    loserEloChange: number;
-    winnerEloBefore: number;
-    loserEloBefore: number;
-    winnerEloAfter: number;
-    loserEloAfter: number;
+    winnerGlickoBefore: GlickoState;
+    loserGlickoBefore: GlickoState;
+    winnerGlickoAfter: GlickoState;
+    loserGlickoAfter: GlickoState;
     voterId?: string;
-    k_factor: number;
 }
 
-export class BattleHistoryService {
+export const battleHistoryService = {
     generateBattleId(): string {
         return firestore.collection(COLLECTIONS.BATTLES).doc().id;
-    }
+    },
 
     createBattleHistoryDocument(data: CreateBattleHistoryData): BattleHistory {
         return {
@@ -31,17 +29,25 @@ export class BattleHistoryService {
             loserImageId: data.loserImageId,
             winnerUserId: data.winnerUserId,
             loserUserId: data.loserUserId,
-            winnerEloChange: data.winnerEloChange,
-            loserEloChange: data.loserEloChange,
-            winnerEloBefore: data.winnerEloBefore,
-            loserEloBefore: data.loserEloBefore,
-            winnerEloAfter: data.winnerEloAfter,
-            loserEloAfter: data.loserEloAfter,
+
+            // Before states
+            winnerRatingBefore: data.winnerGlickoBefore.rating,
+            winnerRdBefore: data.winnerGlickoBefore.rd,
+            loserRatingBefore: data.loserGlickoBefore.rating,
+            loserRdBefore: data.loserGlickoBefore.rd,
+
+            // After states
+            winnerRatingAfter: data.winnerGlickoAfter.rating,
+            winnerRdAfter: data.winnerGlickoAfter.rd,
+            loserRatingAfter: data.loserGlickoAfter.rating,
+            loserRdAfter: data.loserGlickoAfter.rd,
+
+            // Metadata
             timestamp: Timestamp.now(),
-            voterId: data.voterId,
-            k_factor: data.k_factor,
+            systemVersion: 2,
+            ...(data.voterId && { voterId: data.voterId }), // Only include voterId if present
         };
-    }
+    },
 
     async getBattleHistoryForUser(userId: string, limit: number = 50): Promise<BattleHistory[]> {
         const winnerQuery = firestore
@@ -75,7 +81,7 @@ export class BattleHistoryService {
         return battles
             .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
             .slice(0, limit);
-    }
+    },
 
     async getBattleHistoryForImage(imageId: string, limit: number = 50): Promise<BattleHistory[]> {
         const winnerQuery = firestore
@@ -109,7 +115,5 @@ export class BattleHistoryService {
         return battles
             .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
             .slice(0, limit);
-    }
-}
-
-export const battleHistoryService = new BattleHistoryService();
+    },
+};

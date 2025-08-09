@@ -7,14 +7,20 @@ export interface BattleHistory {
     winnerUserId: string;
     loserUserId: string;
 
-    winnerEloChange: number;
-    loserEloChange: number;
-    winnerEloBefore: number;
-    loserEloBefore: number;
-    winnerEloAfter: number;
-    loserEloAfter: number;
+    // Glicko-2 before states (display values)
+    winnerRatingBefore: number;
+    winnerRdBefore: number;
+    loserRatingBefore: number;
+    loserRdBefore: number;
 
+    // Glicko-2 after states (display values)
+    winnerRatingAfter: number;
+    winnerRdAfter: number;
+    loserRatingAfter: number;
+    loserRdAfter: number;
+
+    // Metadata
+    voterId?: string; // Optional authenticated voter
     timestamp: Timestamp;
-    voterId?: string;
-    k_factor: number;
+    systemVersion: 2;
 }
