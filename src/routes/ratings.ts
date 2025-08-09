@@ -3,6 +3,8 @@ import { type AuthRequest } from '../middleware/firebase-auth-middleware.js';
 import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { UserService } from '../services/user-service.js';
+import { battleHistoryService } from '../services/battle-history-service.js';
+import { firestore, COLLECTIONS } from '../config/firestore.js';
 
 const router = Router();
 
@@ -72,19 +74,47 @@ router.post(
                 loser.eloScore,
             );
 
-            // Update both images in Firestore
-            await Promise.all([
-                imageDataService.updateRating(winnerId, {
-                    battles: winner.battles + 1,
-                    wins: winner.wins + 1,
-                    eloScore: newWinnerScore,
-                }),
-                imageDataService.updateRating(loserId, {
-                    battles: loser.battles + 1,
-                    losses: loser.losses + 1,
-                    eloScore: newLoserScore,
-                }),
-            ]);
+            // Create battle history document
+            const battleHistory = battleHistoryService.createBattleHistoryDocument({
+                winnerImageId: winnerId,
+                loserImageId: loserId,
+                winnerUserId: winner.userId,
+                loserUserId: loser.userId,
+                winnerEloChange: newWinnerScore - winner.eloScore,
+                loserEloChange: newLoserScore - loser.eloScore,
+                winnerEloBefore: winner.eloScore,
+                loserEloBefore: loser.eloScore,
+                winnerEloAfter: newWinnerScore,
+                loserEloAfter: newLoserScore,
+                voterId: req.user?.id,
+                k_factor: K_FACTOR,
+            });
+
+            // Create batch write for atomic transaction
+            const batch = firestore.batch();
+
+            // Add battle history to batch
+            const battleRef = firestore.collection(COLLECTIONS.BATTLES).doc(battleHistory.battleId);
+            batch.set(battleRef, battleHistory);
+
+            // Add winner image update to batch
+            const winnerRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(winnerId);
+            batch.update(winnerRef, {
+                battles: winner.battles + 1,
+                wins: winner.wins + 1,
+                eloScore: newWinnerScore,
+            });
+
+            // Add loser image update to batch
+            const loserRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(loserId);
+            batch.update(loserRef, {
+                battles: loser.battles + 1,
+                losses: loser.losses + 1,
+                eloScore: newLoserScore,
+            });
+
+            // Execute all updates atomically
+            await batch.commit();
 
             // Update user's rate count if authenticated
             if (req.user?.id) {
