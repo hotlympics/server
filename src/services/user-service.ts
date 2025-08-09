@@ -9,6 +9,8 @@ interface UserDocument {
     googleId: string | null;
     gender: 'unknown' | 'male' | 'female';
     dateOfBirth: Timestamp | null;
+    tosVersion: string | null;
+    tosAcceptedAt: Timestamp | null;
     rateCount: number;
     uploadedImageIds: string[];
     poolImageIds: string[];
@@ -32,6 +34,8 @@ export class UserService {
             googleId: data.googleId,
             gender: data.gender,
             dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+            tosVersion: data.tosVersion || null,
+            tosAcceptedAt: data.tosAcceptedAt ? data.tosAcceptedAt.toDate() : null,
             rateCount: data.rateCount,
             uploadedImageIds: data.uploadedImageIds || [],
             poolImageIds: data.poolImageIds || [],
@@ -44,6 +48,9 @@ export class UserService {
         const documentData: UserDocument = {
             ...userData,
             dateOfBirth: userData.dateOfBirth ? Timestamp.fromDate(userData.dateOfBirth) : null,
+            tosAcceptedAt: userData.tosAcceptedAt
+                ? Timestamp.fromDate(userData.tosAcceptedAt)
+                : null,
         };
 
         const docRef = await this.collection.add(documentData);
@@ -89,13 +96,17 @@ export class UserService {
     }
 
     static async updateUser(id: string, updates: Partial<Omit<User, 'id'>>): Promise<User | null> {
-        const { dateOfBirth, ...otherUpdates } = updates;
+        const { dateOfBirth, tosAcceptedAt, ...otherUpdates } = updates;
         const updateData: Partial<UserDocument> = {
             ...otherUpdates,
         };
 
         if (dateOfBirth !== undefined) {
             updateData.dateOfBirth = dateOfBirth ? Timestamp.fromDate(dateOfBirth) : null;
+        }
+
+        if (tosAcceptedAt !== undefined) {
+            updateData.tosAcceptedAt = tosAcceptedAt ? Timestamp.fromDate(tosAcceptedAt) : null;
         }
 
         await this.collection.doc(id).update(updateData);
@@ -154,6 +165,8 @@ export class UserService {
                     googleId: data.googleId,
                     gender: data.gender,
                     dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+                    tosVersion: data.tosVersion || null,
+                    tosAcceptedAt: data.tosAcceptedAt ? data.tosAcceptedAt.toDate() : null,
                     rateCount: data.rateCount,
                     uploadedImageIds: data.uploadedImageIds || [],
                     poolImageIds: data.poolImageIds || [],
@@ -180,6 +193,8 @@ export class UserService {
                     googleId: googleData.googleId, // Use the new Google ID
                     gender: data.gender,
                     dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+                    tosVersion: data.tosVersion || null,
+                    tosAcceptedAt: data.tosAcceptedAt ? data.tosAcceptedAt.toDate() : null,
                     rateCount: data.rateCount,
                     uploadedImageIds: data.uploadedImageIds || [],
                     poolImageIds: data.poolImageIds || [],
@@ -195,6 +210,8 @@ export class UserService {
                 googleId: googleData.googleId,
                 gender: 'unknown',
                 dateOfBirth: null,
+                tosVersion: null,
+                tosAcceptedAt: null,
                 rateCount: 0,
                 uploadedImageIds: [],
                 poolImageIds: [],
@@ -212,6 +229,8 @@ export class UserService {
                 googleId: newUserData.googleId,
                 gender: newUserData.gender,
                 dateOfBirth: null,
+                tosVersion: null,
+                tosAcceptedAt: null,
                 rateCount: newUserData.rateCount,
                 uploadedImageIds: newUserData.uploadedImageIds,
                 poolImageIds: newUserData.poolImageIds,
@@ -248,6 +267,8 @@ export class UserService {
             googleId: null,
             gender: 'unknown',
             dateOfBirth: null,
+            tosVersion: null,
+            tosAcceptedAt: null,
             rateCount: 0,
             uploadedImageIds: [],
             poolImageIds: [],
@@ -261,6 +282,7 @@ export class UserService {
             id: docRef.id,
             ...newUserData,
             dateOfBirth: null,
+            tosAcceptedAt: null,
         };
     }
 }

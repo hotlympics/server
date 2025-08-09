@@ -90,7 +90,9 @@ export class ImageDataService {
         },
     ): Promise<ImageData[] | null> {
         // Build the query based on criteria
-        let query: FirebaseFirestore.Query = firestore.collection(COLLECTION_NAME);
+        let query: FirebaseFirestore.Query = firestore
+            .collection(COLLECTION_NAME)
+            .where('inPool', '==', true); // Only include images actively in the rating pool
 
         if (criteria.gender !== undefined) {
             query = query.where('gender', '==', criteria.gender);
