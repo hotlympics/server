@@ -5,6 +5,7 @@ import {
 } from '../middleware/firebase-auth-middleware.js';
 import { UserService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
+import { CURRENT_TOS_VERSION } from '../config/tos-config.js';
 
 const router = Router();
 
@@ -89,6 +90,51 @@ router.put('/profile', firebaseAuthMiddleware, (req: AuthRequest, res: Response)
         } catch (error) {
             console.error('Profile update error:', error);
             res.status(500).json({ error: { message: 'Failed to update profile' } });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Accept Terms of Service
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.post('/accept-tos', firebaseAuthMiddleware, (req: AuthRequest, res: Response): void => {
+    (async () => {
+        try {
+            const userId = req.user!.id;
+            const { tosVersion } = req.body as { tosVersion?: string };
+
+            // Validate TOS version
+            if (!tosVersion) {
+                res.status(400).json({ error: { message: 'TOS version is required' } });
+                return;
+            }
+
+            // Check if the provided version matches the current version
+            if (tosVersion !== CURRENT_TOS_VERSION) {
+                res.status(400).json({
+                    error: {
+                        message: 'Invalid TOS version. Please refresh and try again.',
+                        currentVersion: CURRENT_TOS_VERSION,
+                    },
+                });
+                return;
+            }
+
+            // Update user with TOS acceptance
+            const updatedUser = await UserService.updateUser(userId, {
+                tosVersion: CURRENT_TOS_VERSION,
+                tosAcceptedAt: new Date(),
+            });
+
+            res.json({
+                success: true,
+                user: updatedUser,
+                message: 'Terms of Service accepted successfully',
+            });
+        } catch (error) {
+            console.error('TOS acceptance error:', error);
+            res.status(500).json({ error: { message: 'Failed to accept Terms of Service' } });
         }
     })().catch(() => {
         // Error already handled in try-catch
