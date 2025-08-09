@@ -8,6 +8,7 @@ import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { glicko2Service } from '../services/glicko2-service.js';
 import { ImageData } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -159,7 +160,7 @@ router.post(
                 message: 'Rating submitted successfully',
             });
         } catch (error) {
-            console.error('Rating submission error:', error);
+            logger.error('Rating submission error:', error);
             res.status(500).json({
                 error: {
                     message: 'Failed to submit rating',
