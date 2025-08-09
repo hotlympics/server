@@ -17,10 +17,10 @@ export interface CreateBattleHistoryData {
     voterId?: string;
 }
 
-export class BattleHistoryService {
+export const battleHistoryService = {
     generateBattleId(): string {
         return firestore.collection(COLLECTIONS.BATTLES).doc().id;
-    }
+    },
 
     createBattleHistoryDocument(data: CreateBattleHistoryData): BattleHistory {
         return {
@@ -47,7 +47,7 @@ export class BattleHistoryService {
             systemVersion: 2,
             ...(data.voterId && { voterId: data.voterId }), // Only include voterId if present
         };
-    }
+    },
 
     async getBattleHistoryForUser(userId: string, limit: number = 50): Promise<BattleHistory[]> {
         const winnerQuery = firestore
@@ -81,7 +81,7 @@ export class BattleHistoryService {
         return battles
             .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
             .slice(0, limit);
-    }
+    },
 
     async getBattleHistoryForImage(imageId: string, limit: number = 50): Promise<BattleHistory[]> {
         const winnerQuery = firestore
@@ -115,7 +115,5 @@ export class BattleHistoryService {
         return battles
             .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
             .slice(0, limit);
-    }
-}
-
-export const battleHistoryService = new BattleHistoryService();
+    },
+};
