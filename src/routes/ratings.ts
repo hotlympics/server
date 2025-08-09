@@ -7,10 +7,9 @@ import { battleHistoryService } from '../services/battle-history-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { Glicko2Service } from '../services/glicko2-service.js';
 import { ImageData } from '../models/image-data.js';
+import { Timestamp } from '@google-cloud/firestore';
 
 const router = Router();
-
-const K_FACTOR = 32;
 
 /**
  * Ensures an ImageData object has Glicko fields, initializing them on-demand if missing
@@ -28,19 +27,6 @@ export function ensureGlickoFields(imageData: ImageData): ImageData {
         };
     }
     return imageData;
-}
-
-function calculateEloRating(
-    winnerScore: number,
-    loserScore: number,
-): { newWinnerScore: number; newLoserScore: number } {
-    const expectedWinner = 1 / (1 + Math.pow(10, (loserScore - winnerScore) / 400));
-    const expectedLoser = 1 / (1 + Math.pow(10, (winnerScore - loserScore) / 400));
-
-    const newWinnerScore = Math.round(winnerScore + K_FACTOR * (1 - expectedWinner));
-    const newLoserScore = Math.round(loserScore + K_FACTOR * (0 - expectedLoser));
-
-    return { newWinnerScore, newLoserScore };
 }
 
 router.post(
@@ -88,31 +74,58 @@ router.post(
                 return;
             }
 
-            // Calculate new Elo scores
-            const { newWinnerScore, newLoserScore } = calculateEloRating(
-                winner.eloScore,
-                loser.eloScore,
+            // Ensure both images have Glicko fields (initialize on-demand if needed)
+            const winnerWithGlicko = ensureGlickoFields(winner);
+            const loserWithGlicko = ensureGlickoFields(loser);
+
+            const winnerGlickoBefore = winnerWithGlicko.glicko!;
+            const loserGlickoBefore = loserWithGlicko.glicko!;
+
+            // Calculate new Glicko ratings
+            const { winner: updatedWinner, loser: updatedLoser } = Glicko2Service.updateBattle(
+                winnerGlickoBefore,
+                loserGlickoBefore,
             );
 
+            // Create new Glicko states with updated timestamp
+            const winnerGlickoAfter = {
+                rating: updatedWinner.rating,
+                rd: updatedWinner.rd,
+                volatility: updatedWinner.volatility,
+                mu: updatedWinner.mu,
+                phi: updatedWinner.phi,
+                lastUpdateAt: Timestamp.now(),
+                systemVersion: 2 as const,
+            };
+
+            const loserGlickoAfter = {
+                rating: updatedLoser.rating,
+                rd: updatedLoser.rd,
+                volatility: updatedLoser.volatility,
+                mu: updatedLoser.mu,
+                phi: updatedLoser.phi,
+                lastUpdateAt: Timestamp.now(),
+                systemVersion: 2 as const,
+            };
+
             // Create battle history document
-            const battleHistory = battleHistoryService.createBattleHistoryDocument({
+            const battleHistoryData = {
                 winnerImageId: winnerId,
                 loserImageId: loserId,
-                winnerUserId: winner.userId,
-                loserUserId: loser.userId,
-                winnerEloChange: newWinnerScore - winner.eloScore,
-                loserEloChange: newLoserScore - loser.eloScore,
-                winnerEloBefore: winner.eloScore,
-                loserEloBefore: loser.eloScore,
-                winnerEloAfter: newWinnerScore,
-                loserEloAfter: newLoserScore,
-                voterId: req.user?.id,
-                k_factor: K_FACTOR,
-            });
+                winnerUserId: winnerWithGlicko.userId,
+                loserUserId: loserWithGlicko.userId,
+                winnerGlickoBefore,
+                loserGlickoBefore,
+                winnerGlickoAfter,
+                loserGlickoAfter,
+                ...(req.user?.id && { voterId: req.user.id }), // Only include voterId if user is logged in
+            };
+            const battleHistory = battleHistoryService.createBattleHistoryDocument(battleHistoryData);
 
             // Create batch write for atomic transaction
             const batch = firestore.batch();
 
+            // TODO: Add battle history to batch when Glicko-2 is implemented
             // Add battle history to batch
             const battleRef = firestore.collection(COLLECTIONS.BATTLES).doc(battleHistory.battleId);
             batch.set(battleRef, battleHistory);
@@ -120,17 +133,19 @@ router.post(
             // Add winner image update to batch
             const winnerRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(winnerId);
             batch.update(winnerRef, {
-                battles: winner.battles + 1,
-                wins: winner.wins + 1,
-                eloScore: newWinnerScore,
+                battles: winnerWithGlicko.battles + 1,
+                wins: winnerWithGlicko.wins + 1,
+                glicko: winnerGlickoAfter,
+                // Note: eloScore is intentionally NOT updated (legacy field)
             });
 
             // Add loser image update to batch
             const loserRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(loserId);
             batch.update(loserRef, {
-                battles: loser.battles + 1,
-                losses: loser.losses + 1,
-                eloScore: newLoserScore,
+                battles: loserWithGlicko.battles + 1,
+                losses: loserWithGlicko.losses + 1,
+                glicko: loserGlickoAfter,
+                // Note: eloScore is intentionally NOT updated (legacy field)
             });
 
             // Execute all updates atomically

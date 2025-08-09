@@ -1,6 +1,8 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { BattleHistory } from '../models/battle-history.js';
+import { GlickoState } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { GLICKO2_CONFIG } from '../config/glicko2-config.js';
 
 const COLLECTION_NAME = COLLECTIONS.BATTLES;
 
@@ -9,14 +11,11 @@ export interface CreateBattleHistoryData {
     loserImageId: string;
     winnerUserId: string;
     loserUserId: string;
-    winnerEloChange: number;
-    loserEloChange: number;
-    winnerEloBefore: number;
-    loserEloBefore: number;
-    winnerEloAfter: number;
-    loserEloAfter: number;
+    winnerGlickoBefore: GlickoState;
+    loserGlickoBefore: GlickoState;
+    winnerGlickoAfter: GlickoState;
+    loserGlickoAfter: GlickoState;
     voterId?: string;
-    k_factor: number;
 }
 
 export class BattleHistoryService {
@@ -25,21 +24,41 @@ export class BattleHistoryService {
     }
 
     createBattleHistoryDocument(data: CreateBattleHistoryData): BattleHistory {
+        const winnerRatingChange = data.winnerGlickoAfter.rating - data.winnerGlickoBefore.rating;
+        const winnerRdChange = data.winnerGlickoAfter.rd - data.winnerGlickoBefore.rd;
+        const loserRatingChange = data.loserGlickoAfter.rating - data.loserGlickoBefore.rating;
+        const loserRdChange = data.loserGlickoAfter.rd - data.loserGlickoBefore.rd;
+
         return {
             battleId: this.generateBattleId(),
             winnerImageId: data.winnerImageId,
             loserImageId: data.loserImageId,
             winnerUserId: data.winnerUserId,
             loserUserId: data.loserUserId,
-            winnerEloChange: data.winnerEloChange,
-            loserEloChange: data.loserEloChange,
-            winnerEloBefore: data.winnerEloBefore,
-            loserEloBefore: data.loserEloBefore,
-            winnerEloAfter: data.winnerEloAfter,
-            loserEloAfter: data.loserEloAfter,
+
+            // Before states
+            winnerRatingBefore: data.winnerGlickoBefore.rating,
+            winnerRdBefore: data.winnerGlickoBefore.rd,
+            loserRatingBefore: data.loserGlickoBefore.rating,
+            loserRdBefore: data.loserGlickoBefore.rd,
+
+            // After states
+            winnerRatingAfter: data.winnerGlickoAfter.rating,
+            winnerRdAfter: data.winnerGlickoAfter.rd,
+            loserRatingAfter: data.loserGlickoAfter.rating,
+            loserRdAfter: data.loserGlickoAfter.rd,
+
+            // Changes
+            winnerRatingChange,
+            winnerRdChange,
+            loserRatingChange,
+            loserRdChange,
+
+            // Metadata
             timestamp: Timestamp.now(),
-            voterId: data.voterId,
-            k_factor: data.k_factor,
+            tau: GLICKO2_CONFIG.tau,
+            systemVersion: 2,
+            ...(data.voterId && { voterId: data.voterId }), // Only include voterId if present
         };
     }
 
@@ -47,12 +66,14 @@ export class BattleHistoryService {
         const winnerQuery = firestore
             .collection(COLLECTION_NAME)
             .where('winnerUserId', '==', userId)
+            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
         const loserQuery = firestore
             .collection(COLLECTION_NAME)
             .where('loserUserId', '==', userId)
+            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
@@ -81,12 +102,14 @@ export class BattleHistoryService {
         const winnerQuery = firestore
             .collection(COLLECTION_NAME)
             .where('winnerImageId', '==', imageId)
+            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
         const loserQuery = firestore
             .collection(COLLECTION_NAME)
             .where('loserImageId', '==', imageId)
+            .where('systemVersion', '==', 2)
             .orderBy('timestamp', 'desc')
             .limit(limit);
 
