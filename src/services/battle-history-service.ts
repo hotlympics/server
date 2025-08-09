@@ -2,7 +2,6 @@ import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { BattleHistory } from '../models/battle-history.js';
 import { GlickoState } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
-import { GLICKO2_CONFIG } from '../config/glicko2-config.js';
 
 const COLLECTION_NAME = COLLECTIONS.BATTLES;
 
@@ -24,11 +23,6 @@ export class BattleHistoryService {
     }
 
     createBattleHistoryDocument(data: CreateBattleHistoryData): BattleHistory {
-        const winnerRatingChange = data.winnerGlickoAfter.rating - data.winnerGlickoBefore.rating;
-        const winnerRdChange = data.winnerGlickoAfter.rd - data.winnerGlickoBefore.rd;
-        const loserRatingChange = data.loserGlickoAfter.rating - data.loserGlickoBefore.rating;
-        const loserRdChange = data.loserGlickoAfter.rd - data.loserGlickoBefore.rd;
-
         return {
             battleId: this.generateBattleId(),
             winnerImageId: data.winnerImageId,
@@ -48,15 +42,8 @@ export class BattleHistoryService {
             loserRatingAfter: data.loserGlickoAfter.rating,
             loserRdAfter: data.loserGlickoAfter.rd,
 
-            // Changes
-            winnerRatingChange,
-            winnerRdChange,
-            loserRatingChange,
-            loserRdChange,
-
             // Metadata
             timestamp: Timestamp.now(),
-            tau: GLICKO2_CONFIG.tau,
             systemVersion: 2,
             ...(data.voterId && { voterId: data.voterId }), // Only include voterId if present
         };
