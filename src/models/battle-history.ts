@@ -5,7 +5,7 @@ export interface BattleHistory {
     battleId: string;
     winnerImageId: string;
     loserImageId: string;
-    winnerUserId: string; // For user stats/history queries
+    winnerUserId: string;
     loserUserId: string;
 
     // Glicko-2 before states (display values)
