@@ -19,11 +19,11 @@ export interface GlickoUpdateResult {
     phi: number;
 }
 
-export class Glicko2Service {
+export const glicko2Service = {
     /**
      * Initialize Glicko state from existing battle count (on-demand)
      */
-    static initializeFromBattleCount(legacyElo: number, battleCount: number): GlickoPlayerState {
+    initializeFromBattleCount(legacyElo: number, battleCount: number): GlickoPlayerState {
         // Find appropriate RD based on battle count
         const rdMapping = GLICKO2_CONFIG.rdInitializationMap.find(
             (mapping) => battleCount >= mapping.minBattles,
@@ -43,12 +43,12 @@ export class Glicko2Service {
             lastUpdateAt: Timestamp.now(),
             systemVersion: 2,
         };
-    }
+    },
 
     /**
      * Update player ratings based on a single battle (winner vs loser)
      */
-    static updateBattle(
+    updateBattle(
         winner: GlickoPlayerState,
         loser: GlickoPlayerState,
     ): {
@@ -65,7 +65,7 @@ export class Glicko2Service {
             winner: winnerResult,
             loser: loserResult,
         };
-    }
+    },
 
     /**
      * Update a single player's rating against multiple opponents
@@ -73,7 +73,7 @@ export class Glicko2Service {
      * @param opponents Array of opponent states
      * @param scores Array of scores (1 = win, 0 = loss, 0.5 = draw)
      */
-    private static updatePlayer(
+    updatePlayer(
         player: GlickoPlayerState,
         opponents: GlickoPlayerState[],
         scores: number[],
@@ -134,18 +134,12 @@ export class Glicko2Service {
             mu: newMu,
             phi: newPhi,
         };
-    }
+    },
 
     /**
      * Update volatility using Illinois algorithm (variant of Regula Falsi)
      */
-    private static updateVolatility(
-        sigma: number,
-        phi: number,
-        v: number,
-        delta: number,
-        tau: number,
-    ): number {
+    updateVolatility(sigma: number, phi: number, v: number, delta: number, tau: number): number {
         const epsilon = GLICKO2_CONFIG.epsilon;
 
         // Function f(x) to find root of
@@ -191,5 +185,5 @@ export class Glicko2Service {
         }
 
         return Math.exp(A / 2);
-    }
-}
+    },
+};

@@ -5,7 +5,7 @@ import { imageDataService } from '../services/image-data-service.js';
 import { UserService } from '../services/user-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
-import { Glicko2Service } from '../services/glicko2-service.js';
+import { glicko2Service } from '../services/glicko2-service.js';
 import { ImageData } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 
@@ -14,10 +14,10 @@ const router = Router();
 /**
  * Ensures an ImageData object has Glicko fields, initializing them on-demand if missing
  */
-export function ensureGlickoFields(imageData: ImageData): ImageData {
+function ensureGlickoFields(imageData: ImageData): ImageData {
     if (!imageData.glicko) {
         // Initialize Glicko fields on-demand using existing battle count
-        const glickoState = Glicko2Service.initializeFromBattleCount(
+        const glickoState = glicko2Service.initializeFromBattleCount(
             imageData.eloScore || 1500,
             imageData.battles || 0,
         );
@@ -82,7 +82,7 @@ router.post(
             const loserGlickoBefore = loserWithGlicko.glicko!;
 
             // Calculate new Glicko ratings
-            const { winner: updatedWinner, loser: updatedLoser } = Glicko2Service.updateBattle(
+            const { winner: updatedWinner, loser: updatedLoser } = glicko2Service.updateBattle(
                 winnerGlickoBefore,
                 loserGlickoBefore,
             );
@@ -136,7 +136,6 @@ router.post(
                 battles: winnerWithGlicko.battles + 1,
                 wins: winnerWithGlicko.wins + 1,
                 glicko: winnerGlickoAfter,
-                // Note: eloScore is intentionally NOT updated (legacy field)
             });
 
             // Add loser image update to batch
@@ -145,7 +144,6 @@ router.post(
                 battles: loserWithGlicko.battles + 1,
                 losses: loserWithGlicko.losses + 1,
                 glicko: loserGlickoAfter,
-                // Note: eloScore is intentionally NOT updated (legacy field)
             });
 
             // Execute all updates atomically
