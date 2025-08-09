@@ -213,6 +213,7 @@ router.post(
                     for (const file of files) {
                         try {
                             // Generate unique image ID
+                            // TODO: Consider using Firestore auto-generated IDs (firestore.collection().doc().id) for consistency with user IDs and battle IDs
                             const imageId = uuidv4();
 
                             // Upload to Google Cloud Storage

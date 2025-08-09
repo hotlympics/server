@@ -74,6 +74,7 @@ router.post(
             }
 
             // Generate a unique imageId
+            // TODO: Consider using Firestore auto-generated IDs (firestore.collection().doc().id) for consistency with user IDs and battle IDs
             const imageId = uuidv4();
             const fileName = `${imageId}.${fileExtension}`;
 
@@ -176,6 +177,7 @@ router.post(
             }
 
             // Generate a unique imageId
+            // TODO: Consider using Firestore auto-generated IDs (firestore.collection().doc().id) for consistency with user IDs and battle IDs
             const imageId = uuidv4();
 
             // Upload to GCS with the imageId
