@@ -120,12 +120,12 @@ router.post(
                 loserGlickoAfter,
                 ...(req.user?.id && { voterId: req.user.id }), // Only include voterId if user is logged in
             };
-            const battleHistory = battleHistoryService.createBattleHistoryDocument(battleHistoryData);
+            const battleHistory =
+                battleHistoryService.createBattleHistoryDocument(battleHistoryData);
 
             // Create batch write for atomic transaction
             const batch = firestore.batch();
 
-            // TODO: Add battle history to batch when Glicko-2 is implemented
             // Add battle history to batch
             const battleRef = firestore.collection(COLLECTIONS.BATTLES).doc(battleHistory.battleId);
             batch.set(battleRef, battleHistory);

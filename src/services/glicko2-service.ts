@@ -2,11 +2,11 @@ import { GLICKO2_CONFIG } from '../config/glicko2-config.js';
 import { Timestamp } from '@google-cloud/firestore';
 
 export interface GlickoPlayerState {
-    rating: number;        // Display rating R
-    rd: number;            // Display rating deviation RD
-    volatility: number;    // σ (sigma)
-    mu: number;            // Internal rating μ
-    phi: number;           // Internal deviation ϕ
+    rating: number; // Display rating R
+    rd: number; // Display rating deviation RD
+    volatility: number; // σ (sigma)
+    mu: number; // Internal rating μ
+    phi: number; // Internal deviation ϕ
     lastUpdateAt: Timestamp;
     systemVersion: 2;
 }
@@ -26,14 +26,14 @@ export class Glicko2Service {
     static initializeFromBattleCount(legacyElo: number, battleCount: number): GlickoPlayerState {
         // Find appropriate RD based on battle count
         const rdMapping = GLICKO2_CONFIG.rdInitializationMap.find(
-            mapping => battleCount >= mapping.minBattles
+            (mapping) => battleCount >= mapping.minBattles,
         );
         const initialRD = rdMapping?.rd ?? GLICKO2_CONFIG.defaultRD;
-        
+
         // Convert to internal scale
         const mu = (legacyElo - GLICKO2_CONFIG.defaultRating) / GLICKO2_CONFIG.scale;
         const phi = initialRD / GLICKO2_CONFIG.scale;
-        
+
         return {
             rating: legacyElo, // Keep continuity with existing Elo
             rd: initialRD,
@@ -48,16 +48,19 @@ export class Glicko2Service {
     /**
      * Update player ratings based on a single battle (winner vs loser)
      */
-    static updateBattle(winner: GlickoPlayerState, loser: GlickoPlayerState): {
+    static updateBattle(
+        winner: GlickoPlayerState,
+        loser: GlickoPlayerState,
+    ): {
         winner: GlickoUpdateResult;
         loser: GlickoUpdateResult;
     } {
         // Update winner (score = 1 against loser)
         const winnerResult = this.updatePlayer(winner, [loser], [1]);
-        
-        // Update loser (score = 0 against winner) 
+
+        // Update loser (score = 0 against winner)
         const loserResult = this.updatePlayer(loser, [winner], [0]);
-        
+
         return {
             winner: winnerResult,
             loser: loserResult,
@@ -73,57 +76,57 @@ export class Glicko2Service {
     private static updatePlayer(
         player: GlickoPlayerState,
         opponents: GlickoPlayerState[],
-        scores: number[]
+        scores: number[],
     ): GlickoUpdateResult {
         const tau = GLICKO2_CONFIG.tau;
-        
+
         // Step 1: Convert to Glicko-2 scale (internal μ, φ, σ)
         const mu = player.mu;
         const phi = player.phi;
         const sigma = player.volatility;
-        
+
         // Step 2: Compute the estimated variance (v) and improvement (delta)
         let v = 0;
         let delta = 0;
-        
+
         for (let i = 0; i < opponents.length; i++) {
             const opponentMu = opponents[i].mu;
             const opponentPhi = opponents[i].phi;
             const score = scores[i];
-            
+
             // g(φ) function
-            const g = 1 / Math.sqrt(1 + 3 * opponentPhi * opponentPhi / (Math.PI * Math.PI));
-            
+            const g = 1 / Math.sqrt(1 + (3 * opponentPhi * opponentPhi) / (Math.PI * Math.PI));
+
             // E(μ, μj, φj) function - expected score
             const E = 1 / (1 + Math.exp(-g * (mu - opponentMu)));
-            
+
             // Accumulate variance and delta
             const gSquaredE = g * g * E;
             v += gSquaredE * (1 - E);
             delta += g * (score - E);
         }
-        
+
         // Invert variance
         v = 1 / v;
         delta *= v;
-        
+
         // Step 3: Update volatility (σ') using iterative algorithm
         const newSigma = this.updateVolatility(sigma, phi, v, delta, tau);
-        
+
         // Step 4: Update rating deviation (φ')
         const phiStar = Math.sqrt(phi * phi + newSigma * newSigma);
         const newPhi = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
-        
+
         // Step 5: Update rating (μ')
         const newMu = mu + newPhi * newPhi * (delta / v);
-        
+
         // Step 6: Convert back to Glicko scale
         const newRating = GLICKO2_CONFIG.scale * newMu + GLICKO2_CONFIG.defaultRating;
         const newRD = Math.max(
             GLICKO2_CONFIG.minRD,
-            Math.min(GLICKO2_CONFIG.maxRD, GLICKO2_CONFIG.scale * newPhi)
+            Math.min(GLICKO2_CONFIG.maxRD, GLICKO2_CONFIG.scale * newPhi),
         );
-        
+
         return {
             rating: Math.round(newRating),
             rd: Math.round(newRD * 100) / 100, // 2 decimal places
@@ -141,10 +144,10 @@ export class Glicko2Service {
         phi: number,
         v: number,
         delta: number,
-        tau: number
+        tau: number,
     ): number {
         const epsilon = GLICKO2_CONFIG.epsilon;
-        
+
         // Function f(x) to find root of
         const f = (x: number): number => {
             const ex = Math.exp(x);
@@ -153,11 +156,11 @@ export class Glicko2Service {
             const term2 = 2 * (phiSquared + v + ex) * (phiSquared + v + ex);
             return term1 / term2 - (x - Math.log(sigma * sigma)) / (tau * tau);
         };
-        
+
         // Initial bounds
         let A = Math.log(sigma * sigma);
         let B: number;
-        
+
         if (delta * delta > phi * phi + v) {
             B = Math.log(delta * delta - phi * phi - v);
         } else {
@@ -167,86 +170,26 @@ export class Glicko2Service {
             }
             B = A - k * tau;
         }
-        
+
         // Illinois algorithm
         let fA = f(A);
         let fB = f(B);
-        
+
         while (Math.abs(B - A) > epsilon) {
-            const C = A + (A - B) * fA / (fB - fA);
+            const C = A + ((A - B) * fA) / (fB - fA);
             const fC = f(C);
-            
+
             if (fC * fB < 0) {
                 A = B;
                 fA = fB;
             } else {
                 fA = fA / 2;
             }
-            
+
             B = C;
             fB = fC;
         }
-        
-        return Math.exp(A / 2);
-    }
 
-    /**
-     * Test the Glicko-2 implementation with a known example
-     * This can be used to verify the math is working correctly
-     */
-    static testImplementation(): void {
-        console.log('Testing Glicko-2 implementation...');
-        
-        // Create test players with known values
-        const player1: GlickoPlayerState = {
-            rating: 1500,
-            rd: 200,
-            volatility: 0.06,
-            mu: 0, // (1500 - 1500) / 173.7178
-            phi: 200 / 173.7178, // ~1.15
-            lastUpdateAt: Timestamp.now(),
-            systemVersion: 2,
-        };
-        
-        const player2: GlickoPlayerState = {
-            rating: 1400,
-            rd: 30,
-            volatility: 0.06,
-            mu: (1400 - 1500) / 173.7178, // ~-0.576
-            phi: 30 / 173.7178, // ~0.173
-            lastUpdateAt: Timestamp.now(),
-            systemVersion: 2,
-        };
-        
-        // Player1 wins against Player2
-        const result = this.updateBattle(player1, player2);
-        
-        console.log('Player 1 (winner):');
-        console.log(`  Before: Rating=${player1.rating}, RD=${player1.rd}`);
-        console.log(`  After:  Rating=${result.winner.rating}, RD=${result.winner.rd}`);
-        console.log('Player 2 (loser):');
-        console.log(`  Before: Rating=${player2.rating}, RD=${player2.rd}`);
-        console.log(`  After:  Rating=${result.loser.rating}, RD=${result.loser.rd}`);
-        
-        // Basic sanity checks
-        if (result.winner.rating > player1.rating) {
-            console.log('✅ Winner rating increased correctly');
-        } else {
-            console.log('❌ Winner rating should have increased');
-        }
-        
-        if (result.loser.rating < player2.rating) {
-            console.log('✅ Loser rating decreased correctly');
-        } else {
-            console.log('❌ Loser rating should have decreased');
-        }
-        
-        if (result.winner.rd < player1.rd && result.loser.rd < player2.rd) {
-            console.log('✅ Both RDs decreased correctly (more certainty)');
-        } else {
-            console.log('❌ RDs should decrease after battles');
-        }
-        
-        console.log('Glicko-2 test completed.');
+        return Math.exp(A / 2);
     }
 }
