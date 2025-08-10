@@ -38,8 +38,7 @@ interface ImageDataDocument {
     wins: number;
     losses: number;
     draws: number;
-    eloScore?: number; // Legacy field (optional)
-    glicko?: GlickoState; // Glicko-2 rating state
+    glicko: GlickoState;
     inPool: boolean;
 }
 
@@ -353,9 +352,8 @@ router.get('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Respo
                         wins: data.wins,
                         losses: data.losses,
                         draws: data.draws,
-                        // Use Glicko rating if available, otherwise legacy Elo score
-                        rating: data.glicko?.rating || data.eloScore,
-                        rd: data.glicko?.rd || null,
+                        rating: data.glicko.rating,
+                        rd: data.glicko.rd,
                     };
                 }),
             );
