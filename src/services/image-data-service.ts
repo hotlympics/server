@@ -1,6 +1,7 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { ImageData, GlickoState } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { glicko2Service } from './glicko2-service.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
 
@@ -13,6 +14,9 @@ export class ImageDataService {
         dateOfBirth: Date,
         options?: { status?: 'pending' | 'active' },
     ): Promise<ImageData> {
+        // Initialize Glicko-2 state for new images (0 battles = high RD)
+        const glickoState = glicko2Service.initializeFromBattleCount(1500, 0);
+
         const stats: ImageData = {
             imageId,
             userId,
@@ -23,7 +27,7 @@ export class ImageDataService {
             wins: 0,
             losses: 0,
             draws: 0,
-            eloScore: 1500,
+            glicko: glickoState,
             inPool: false,
             status: options?.status || 'active',
         };

@@ -20,8 +20,8 @@ export interface ImageData {
     wins: number; // Number of wins
     losses: number; // Number of losses
     draws: number; // Number of draws
-    eloScore: number; // Legacy Elo rating (deprecated, no longer updated)
-    glicko?: GlickoState; // Glicko-2 rating state (added on-demand)
+    eloScore?: number; // Legacy Elo rating (deprecated, no longer updated, optional for backwards compatibility)
+    glicko?: GlickoState; // Glicko-2 rating state (initialized on upload for new images, missing for legacy images)
     inPool: boolean; // Whether the image is in the pool for battles
     status?: 'pending' | 'active'; // Upload status
 }

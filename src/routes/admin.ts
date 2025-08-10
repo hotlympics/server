@@ -13,6 +13,7 @@ import {
     type AdminRequest,
 } from '../middleware/admin-auth-middleware.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { GlickoState } from '../models/image-data.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -37,7 +38,8 @@ interface ImageDataDocument {
     wins: number;
     losses: number;
     draws: number;
-    eloScore: number;
+    eloScore?: number; // Legacy field (optional)
+    glicko?: GlickoState; // Glicko-2 rating state
     inPool: boolean;
 }
 
@@ -340,11 +342,20 @@ router.get('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Respo
 
                     return {
                         id: doc.id,
-                        ...data,
+                        imageId: data.imageId,
+                        userId: data.userId,
                         imageUrl: signedUrl,
+                        gender: data.gender,
                         dateOfBirth: data.dateOfBirth
                             ? data.dateOfBirth.toDate().toISOString()
                             : null,
+                        battles: data.battles,
+                        wins: data.wins,
+                        losses: data.losses,
+                        draws: data.draws,
+                        // Use Glicko rating if available, otherwise legacy Elo score
+                        rating: data.glicko?.rating || data.eloScore,
+                        rd: data.glicko?.rd || null,
                     };
                 }),
             );
