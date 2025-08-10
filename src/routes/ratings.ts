@@ -6,29 +6,10 @@ import { UserService } from '../services/user-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { glicko2Service } from '../services/glicko2-service.js';
-import { ImageData } from '../models/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { logger } from '../utils/logger.js';
 
 const router = Router();
-
-/**
- * Ensures an ImageData object has Glicko fields, initializing them on-demand if missing
- */
-function ensureGlickoFields(imageData: ImageData): ImageData {
-    if (!imageData.glicko) {
-        // Initialize Glicko fields on-demand using existing battle count
-        const glickoState = glicko2Service.initializeFromBattleCount(
-            imageData.eloScore || 1500,
-            imageData.battles || 0,
-        );
-        return {
-            ...imageData,
-            glicko: glickoState,
-        };
-    }
-    return imageData;
-}
 
 router.post(
     '/',
@@ -75,12 +56,8 @@ router.post(
                 return;
             }
 
-            // Ensure both images have Glicko fields (initialize on-demand if needed)
-            const winnerWithGlicko = ensureGlickoFields(winner);
-            const loserWithGlicko = ensureGlickoFields(loser);
-
-            const winnerGlickoBefore = winnerWithGlicko.glicko!;
-            const loserGlickoBefore = loserWithGlicko.glicko!;
+            const winnerGlickoBefore = winner.glicko;
+            const loserGlickoBefore = loser.glicko;
 
             // Calculate new Glicko ratings
             const { winner: updatedWinner, loser: updatedLoser } = glicko2Service.updateBattle(
@@ -113,8 +90,8 @@ router.post(
             const battleHistoryData = {
                 winnerImageId: winnerId,
                 loserImageId: loserId,
-                winnerUserId: winnerWithGlicko.userId,
-                loserUserId: loserWithGlicko.userId,
+                winnerUserId: winner.userId,
+                loserUserId: loser.userId,
                 winnerGlickoBefore,
                 loserGlickoBefore,
                 winnerGlickoAfter,
@@ -134,16 +111,16 @@ router.post(
             // Add winner image update to batch
             const winnerRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(winnerId);
             batch.update(winnerRef, {
-                battles: winnerWithGlicko.battles + 1,
-                wins: winnerWithGlicko.wins + 1,
+                battles: winner.battles + 1,
+                wins: winner.wins + 1,
                 glicko: winnerGlickoAfter,
             });
 
             // Add loser image update to batch
             const loserRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(loserId);
             batch.update(loserRef, {
-                battles: loserWithGlicko.battles + 1,
-                losses: loserWithGlicko.losses + 1,
+                battles: loser.battles + 1,
+                losses: loser.losses + 1,
                 glicko: loserGlickoAfter,
             });
 

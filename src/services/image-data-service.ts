@@ -65,8 +65,7 @@ export class ImageDataService {
             wins: data.wins as number,
             losses: data.losses as number,
             draws: data.draws as number,
-            eloScore: data.eloScore as number,
-            glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
+            glicko: data.glicko as GlickoState,
             inPool: data.inPool as boolean,
         };
     }
@@ -122,8 +121,7 @@ export class ImageDataService {
                 wins: data.wins as number,
                 losses: data.losses as number,
                 draws: data.draws as number,
-                eloScore: data.eloScore as number,
-                glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
+                glicko: data.glicko as GlickoState,
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active' | undefined,
             };
@@ -174,13 +172,6 @@ export class ImageDataService {
         return selectedImages;
     }
 
-    async updateRating(
-        imageId: string,
-        updates: { battles: number; wins?: number; losses?: number; eloScore: number },
-    ): Promise<void> {
-        await firestore.collection(COLLECTION_NAME).doc(imageId).update(updates);
-    }
-
     async updateImageStatus(
         imageId: string,
         updates: { status: 'pending' | 'active'; fileName?: string; uploadedAt?: Date },
@@ -217,8 +208,7 @@ export class ImageDataService {
                 wins: data.wins as number,
                 losses: data.losses as number,
                 draws: data.draws as number,
-                eloScore: data.eloScore as number,
-                glicko: data.glicko as GlickoState | undefined, // Include Glicko data if present
+                glicko: data.glicko as GlickoState, // All images now have glicko objects
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active',
             };
