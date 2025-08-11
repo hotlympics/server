@@ -2,25 +2,46 @@ import { Timestamp } from '@google-cloud/firestore';
 
 export interface BattleHistory {
     battleId: string;
-    winnerImageId: string;
-    loserImageId: string;
-    winnerUserId: string;
-    loserUserId: string;
+    
+    participants: {
+        winner: {
+            imageId: string;
+            userId: string;
+        };
+        loser: {
+            imageId: string;
+            userId: string;
+        };
+        // Keep array for efficient queries
+        imageIds: [string, string]; // [winnerImageId, loserImageId]
+        voterId?: string; // Optional authenticated voter
+    };
 
-    // Glicko-2 before states (display values)
-    winnerRatingBefore: number;
-    winnerRdBefore: number;
-    loserRatingBefore: number;
-    loserRdBefore: number;
+    ratings: {
+        before: {
+            winner: {
+                rating: number;
+                rd: number;
+            };
+            loser: {
+                rating: number;
+                rd: number;
+            };
+        };
+        after: {
+            winner: {
+                rating: number;
+                rd: number;
+            };
+            loser: {
+                rating: number;
+                rd: number;
+            };
+        };
+    };
 
-    // Glicko-2 after states (display values)
-    winnerRatingAfter: number;
-    winnerRdAfter: number;
-    loserRatingAfter: number;
-    loserRdAfter: number;
-
-    // Metadata
-    voterId?: string; // Optional authenticated voter
-    timestamp: Timestamp;
-    systemVersion: 2;
+    metadata: {
+        timestamp: Timestamp;
+        systemVersion: 2;
+    };
 }

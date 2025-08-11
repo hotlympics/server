@@ -59,10 +59,10 @@ const enhanceBattlesWithEmails = async (battles: BattleHistory[]): Promise<Enhan
     // Extract unique user IDs
     const userIds = new Set<string>();
     battles.forEach((battle) => {
-        userIds.add(battle.winnerUserId);
-        userIds.add(battle.loserUserId);
-        if (battle.voterId) {
-            userIds.add(battle.voterId);
+        userIds.add(battle.participants.winner.userId);
+        userIds.add(battle.participants.loser.userId);
+        if (battle.participants.voterId) {
+            userIds.add(battle.participants.voterId);
         }
     });
 
@@ -97,24 +97,24 @@ const enhanceBattlesWithEmails = async (battles: BattleHistory[]): Promise<Enhan
     // Enhance battles with email data
     return battles.map((battle) => ({
         battleId: battle.battleId,
-        winnerImageId: battle.winnerImageId,
-        loserImageId: battle.loserImageId,
-        winnerUserId: battle.winnerUserId,
-        loserUserId: battle.loserUserId,
-        winnerEmail: userEmailMap.get(battle.winnerUserId) || 'deleted',
-        loserEmail: userEmailMap.get(battle.loserUserId) || 'deleted',
-        winnerRatingBefore: battle.winnerRatingBefore,
-        winnerRdBefore: battle.winnerRdBefore,
-        loserRatingBefore: battle.loserRatingBefore,
-        loserRdBefore: battle.loserRdBefore,
-        winnerRatingAfter: battle.winnerRatingAfter,
-        winnerRdAfter: battle.winnerRdAfter,
-        loserRatingAfter: battle.loserRatingAfter,
-        loserRdAfter: battle.loserRdAfter,
-        voterId: battle.voterId,
-        voterEmail: battle.voterId ? userEmailMap.get(battle.voterId) : undefined,
-        timestamp: battle.timestamp.toDate().toISOString(),
-        systemVersion: battle.systemVersion,
+        winnerImageId: battle.participants.winner.imageId,
+        loserImageId: battle.participants.loser.imageId,
+        winnerUserId: battle.participants.winner.userId,
+        loserUserId: battle.participants.loser.userId,
+        winnerEmail: userEmailMap.get(battle.participants.winner.userId) || 'deleted',
+        loserEmail: userEmailMap.get(battle.participants.loser.userId) || 'deleted',
+        winnerRatingBefore: battle.ratings.before.winner.rating,
+        winnerRdBefore: battle.ratings.before.winner.rd,
+        loserRatingBefore: battle.ratings.before.loser.rating,
+        loserRdBefore: battle.ratings.before.loser.rd,
+        winnerRatingAfter: battle.ratings.after.winner.rating,
+        winnerRdAfter: battle.ratings.after.winner.rd,
+        loserRatingAfter: battle.ratings.after.loser.rating,
+        loserRdAfter: battle.ratings.after.loser.rd,
+        voterId: battle.participants.voterId,
+        voterEmail: battle.participants.voterId ? userEmailMap.get(battle.participants.voterId) : undefined,
+        timestamp: battle.metadata.timestamp.toDate().toISOString(),
+        systemVersion: battle.metadata.systemVersion,
     }));
 };
 
