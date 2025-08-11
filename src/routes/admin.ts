@@ -15,6 +15,7 @@ import {
 } from '../middleware/admin-auth-middleware.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { GlickoState } from '../models/image-data.js';
+import { BattleHistory } from '../models/battle-history.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -52,7 +53,7 @@ interface EnhancedBattle {
 }
 
 // Utility function to enhance battles with user emails
-const enhanceBattlesWithEmails = async (battles: any[]): Promise<EnhancedBattle[]> => {
+const enhanceBattlesWithEmails = async (battles: BattleHistory[]): Promise<EnhancedBattle[]> => {
     if (battles.length === 0) return [];
 
     // Extract unique user IDs
@@ -739,7 +740,6 @@ router.get(
         });
     },
 );
-
 
 // Get image URL by image ID
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
