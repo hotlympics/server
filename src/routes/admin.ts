@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { auth } from '../config/firebase-admin.js';
 import { UserService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
+import { battleHistoryService } from '../services/battle-history-service.js';
 import { storageService } from '../services/storage-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import {
@@ -27,6 +28,94 @@ interface UserDocument {
     displayName?: string | null;
     photoUrl?: string | null;
 }
+
+interface EnhancedBattle {
+    battleId: string;
+    winnerImageId: string;
+    loserImageId: string;
+    winnerUserId: string;
+    loserUserId: string;
+    winnerEmail: string;
+    loserEmail: string;
+    winnerRatingBefore: number;
+    winnerRdBefore: number;
+    loserRatingBefore: number;
+    loserRdBefore: number;
+    winnerRatingAfter: number;
+    winnerRdAfter: number;
+    loserRatingAfter: number;
+    loserRdAfter: number;
+    voterId?: string;
+    voterEmail?: string;
+    timestamp: string;
+    systemVersion: number;
+}
+
+// Utility function to enhance battles with user emails
+const enhanceBattlesWithEmails = async (battles: any[]): Promise<EnhancedBattle[]> => {
+    if (battles.length === 0) return [];
+
+    // Extract unique user IDs
+    const userIds = new Set<string>();
+    battles.forEach((battle) => {
+        userIds.add(battle.winnerUserId);
+        userIds.add(battle.loserUserId);
+        if (battle.voterId) {
+            userIds.add(battle.voterId);
+        }
+    });
+
+    const uniqueUserIds = Array.from(userIds);
+    const userEmailMap = new Map<string, string>();
+
+    // Batch fetch users in chunks of 10 (Firestore 'in' operator limit)
+    const chunkSize = 10;
+    for (let i = 0; i < uniqueUserIds.length; i += chunkSize) {
+        const chunk = uniqueUserIds.slice(i, i + chunkSize);
+
+        try {
+            const userQuery = await firestore
+                .collection(COLLECTIONS.USERS)
+                .where(
+                    '__name__',
+                    'in',
+                    chunk.map((id) => firestore.collection(COLLECTIONS.USERS).doc(id)),
+                )
+                .get();
+
+            userQuery.docs.forEach((doc) => {
+                const userData = doc.data() as UserDocument;
+                userEmailMap.set(doc.id, userData.email);
+            });
+        } catch (error) {
+            console.warn(`Failed to fetch user chunk starting at index ${i}:`, error);
+            // Continue with other chunks even if one fails
+        }
+    }
+
+    // Enhance battles with email data
+    return battles.map((battle) => ({
+        battleId: battle.battleId,
+        winnerImageId: battle.winnerImageId,
+        loserImageId: battle.loserImageId,
+        winnerUserId: battle.winnerUserId,
+        loserUserId: battle.loserUserId,
+        winnerEmail: userEmailMap.get(battle.winnerUserId) || 'deleted',
+        loserEmail: userEmailMap.get(battle.loserUserId) || 'deleted',
+        winnerRatingBefore: battle.winnerRatingBefore,
+        winnerRdBefore: battle.winnerRdBefore,
+        loserRatingBefore: battle.loserRatingBefore,
+        loserRdBefore: battle.loserRdBefore,
+        winnerRatingAfter: battle.winnerRatingAfter,
+        winnerRdAfter: battle.winnerRdAfter,
+        loserRatingAfter: battle.loserRatingAfter,
+        loserRdAfter: battle.loserRdAfter,
+        voterId: battle.voterId,
+        voterEmail: battle.voterId ? userEmailMap.get(battle.voterId) : undefined,
+        timestamp: battle.timestamp.toDate().toISOString(),
+        systemVersion: battle.systemVersion,
+    }));
+};
 
 interface ImageDataDocument {
     imageId: string;
@@ -451,67 +540,6 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
     });
 });
 
-// Get admin dashboard stats
-// eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.get('/stats', adminAuthMiddleware, (_req: AdminRequest, res: Response): void => {
-    (async () => {
-        try {
-            // Get user count
-            const usersSnapshot = await firestore.collection(COLLECTIONS.USERS).get();
-            const userCount = usersSnapshot.size;
-
-            // Get image count
-            const imagesSnapshot = await firestore.collection(COLLECTIONS.IMAGE_DATA).get();
-            const imageCount = imagesSnapshot.size;
-
-            // Get battle count by summing up battles from all images
-            // Note: Each battle involves 2 images, so we divide by 2 to get unique battles
-            let totalBattleEvents = 0;
-            imagesSnapshot.docs.forEach((doc) => {
-                const data = doc.data() as ImageDataDocument;
-                totalBattleEvents += data.battles || 0;
-            });
-            const battleCount = Math.floor(totalBattleEvents / 2);
-
-            // Get users by gender and count pool images
-            let maleUsers = 0;
-            let femaleUsers = 0;
-            let unknownUsers = 0;
-            let totalPoolImages = 0;
-
-            usersSnapshot.docs.forEach((doc) => {
-                const data = doc.data() as UserDocument;
-                const gender = data.gender;
-                if (gender === 'male') maleUsers++;
-                else if (gender === 'female') femaleUsers++;
-                else unknownUsers++;
-
-                // Count pool images
-                if (data.poolImageIds && Array.isArray(data.poolImageIds)) {
-                    totalPoolImages += data.poolImageIds.length;
-                }
-            });
-
-            res.json({
-                totalUsers: userCount,
-                totalImages: imageCount,
-                totalBattles: battleCount,
-                totalPoolImages: totalPoolImages,
-                usersByGender: {
-                    male: maleUsers,
-                    female: femaleUsers,
-                    unknown: unknownUsers,
-                },
-            });
-        } catch (error) {
-            console.error('Get stats error:', error);
-            res.status(500).json({ error: { message: 'Failed to fetch stats' } });
-        }
-    })().catch(() => {
-        // Error already handled in try-catch
-    });
-});
-
 // Delete specific photo
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
 router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
@@ -660,6 +688,101 @@ router.put(
             } catch (error) {
                 console.error('Toggle photo pool error:', error);
                 res.status(500).json({ error: { message: 'Failed to toggle photo pool status' } });
+            }
+        })().catch(() => {
+            // Error already handled in try-catch
+        });
+    },
+);
+
+// Search battles by image ID with emails
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get(
+    '/battles/search-with-emails',
+    adminAuthMiddleware,
+    (req: AdminRequest, res: Response): void => {
+        (async () => {
+            try {
+                const { imageId, limit = '50' } = req.query as {
+                    imageId?: string;
+                    limit?: string;
+                };
+
+                if (!imageId) {
+                    res.status(400).json({
+                        error: { message: 'imageId query parameter is required' },
+                    });
+                    return;
+                }
+
+                const searchLimit = Math.min(parseInt(limit, 10) || 50, 100);
+
+                const battles = await battleHistoryService.getBattleHistoryForImage(
+                    imageId,
+                    searchLimit,
+                );
+                const enhancedBattles = await enhanceBattlesWithEmails(battles);
+
+                res.json({
+                    battles: enhancedBattles,
+                    totalCount: enhancedBattles.length,
+                    searchTerm: imageId,
+                });
+            } catch (error) {
+                console.error('Search battles with emails error:', error);
+                res.status(500).json({
+                    error: { message: 'Failed to search battles with emails' },
+                });
+            }
+        })().catch(() => {
+            // Error already handled in try-catch
+        });
+    },
+);
+
+
+// Get image URL by image ID
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get(
+    '/images/:imageId/url',
+    adminAuthMiddleware,
+    (req: AdminRequest, res: Response): void => {
+        (async () => {
+            try {
+                const { imageId } = req.params;
+
+                // Get image data from Firestore
+                const imageSnapshot = await firestore
+                    .collection(COLLECTIONS.IMAGE_DATA)
+                    .where('imageId', '==', imageId)
+                    .limit(1)
+                    .get();
+
+                if (imageSnapshot.empty) {
+                    res.status(404).json({
+                        error: { message: 'Image not found' },
+                    });
+                    return;
+                }
+
+                const imageDoc = imageSnapshot.docs[0];
+                const imageData = imageDoc.data() as ImageDataDocument;
+
+                // Generate signed URL
+                let signedUrl = imageData.imageUrl; // Default to filename if signing fails
+                try {
+                    signedUrl = await storageService.getSignedUrl(imageData.imageUrl);
+                } catch (error) {
+                    console.error(`Failed to generate signed URL for image ${imageId}:`, error);
+                }
+
+                res.json({
+                    imageId: imageData.imageId,
+                    imageUrl: signedUrl,
+                });
+            } catch (error) {
+                console.error('Get image URL error:', error);
+                res.status(500).json({ error: { message: 'Failed to get image URL' } });
             }
         })().catch(() => {
             // Error already handled in try-catch
