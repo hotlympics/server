@@ -97,18 +97,18 @@ export class ImageDataService {
     ): Promise<ImageData[] | null> {
         const selectedImages: ImageData[] = [];
         const usedUserIds = new Set<string>();
-        
+
         console.log(`[getRandomImages] Requesting ${count} images with criteria:`, criteria);
 
         while (selectedImages.length < count) {
             let image: ImageData | null = null;
             let attempts = 0;
             const maxAttempts = 10;
-            
+
             // Try to find an image from an unused user
             while (!image && attempts < maxAttempts) {
                 const randomValue = Math.random();
-                
+
                 // Build query with random threshold
                 let query: FirebaseFirestore.Query = firestore
                     .collection(COLLECTION_NAME)
@@ -131,18 +131,17 @@ export class ImageDataService {
 
                 if (!snapshot.empty) {
                     const candidate = this.convertDocToImageData(snapshot.docs[0]);
-                    
+
                     // Double-check user uniqueness (in case we couldn't use not-in)
                     if (!usedUserIds.has(candidate.userId)) {
                         image = candidate;
                         usedUserIds.add(candidate.userId);
-                        console.log(`[getRandomImages] Selected image ${candidate.imageId} from user ${candidate.userId} (attempt ${attempts + 1})`);
                     }
                 }
-                
+
                 attempts++;
             }
-            
+
             if (image) {
                 selectedImages.push(image);
             } else {
