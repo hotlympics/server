@@ -95,6 +95,11 @@ export class ImageDataService {
             gender?: 'male' | 'female';
         },
     ): Promise<ImageData[] | null> {
+        // Ensure count doesn't exceed Firestore's not-in limit
+        if (count > 10) {
+            throw new Error(`Cannot request more than 10 images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`);
+        }
+
         const selectedImages: ImageData[] = [];
         const usedUserIds = new Set<string>();
 
