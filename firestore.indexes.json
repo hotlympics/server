@@ -1,4 +1,65 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "battles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants.imageIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "metadata.timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "battles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants.winner.userId", "order": "ASCENDING" },
+        { "fieldPath": "metadata.timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "battles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants.loser.userId", "order": "ASCENDING" },
+        { "fieldPath": "metadata.timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "randomSeed", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "gender", "order": "ASCENDING" },
+        { "fieldPath": "randomSeed", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "randomSeed", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "gender", "order": "ASCENDING" },
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "randomSeed", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

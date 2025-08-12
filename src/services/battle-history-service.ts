@@ -25,41 +25,58 @@ export const battleHistoryService = {
     createBattleHistoryDocument(data: CreateBattleHistoryData): BattleHistory {
         return {
             battleId: this.generateBattleId(),
-            winnerImageId: data.winnerImageId,
-            loserImageId: data.loserImageId,
-            winnerUserId: data.winnerUserId,
-            loserUserId: data.loserUserId,
-
-            // Before states
-            winnerRatingBefore: data.winnerGlickoBefore.rating,
-            winnerRdBefore: data.winnerGlickoBefore.rd,
-            loserRatingBefore: data.loserGlickoBefore.rating,
-            loserRdBefore: data.loserGlickoBefore.rd,
-
-            // After states
-            winnerRatingAfter: data.winnerGlickoAfter.rating,
-            winnerRdAfter: data.winnerGlickoAfter.rd,
-            loserRatingAfter: data.loserGlickoAfter.rating,
-            loserRdAfter: data.loserGlickoAfter.rd,
-
-            // Metadata
-            timestamp: Timestamp.now(),
-            systemVersion: 2,
-            ...(data.voterId && { voterId: data.voterId }), // Only include voterId if present
+            participants: {
+                winner: {
+                    imageId: data.winnerImageId,
+                    userId: data.winnerUserId,
+                },
+                loser: {
+                    imageId: data.loserImageId,
+                    userId: data.loserUserId,
+                },
+                imageIds: [data.winnerImageId, data.loserImageId],
+                ...(data.voterId && { voterId: data.voterId }),
+            },
+            ratings: {
+                before: {
+                    winner: {
+                        rating: data.winnerGlickoBefore.rating,
+                        rd: data.winnerGlickoBefore.rd,
+                    },
+                    loser: {
+                        rating: data.loserGlickoBefore.rating,
+                        rd: data.loserGlickoBefore.rd,
+                    },
+                },
+                after: {
+                    winner: {
+                        rating: data.winnerGlickoAfter.rating,
+                        rd: data.winnerGlickoAfter.rd,
+                    },
+                    loser: {
+                        rating: data.loserGlickoAfter.rating,
+                        rd: data.loserGlickoAfter.rd,
+                    },
+                },
+            },
+            metadata: {
+                timestamp: Timestamp.now(),
+                systemVersion: 2,
+            },
         };
     },
 
     async getBattleHistoryForUser(userId: string, limit: number = 50): Promise<BattleHistory[]> {
         const winnerQuery = firestore
             .collection(COLLECTION_NAME)
-            .where('winnerUserId', '==', userId)
-            .orderBy('timestamp', 'desc')
+            .where('participants.winner.userId', '==', userId)
+            .orderBy('metadata.timestamp', 'desc')
             .limit(limit);
 
         const loserQuery = firestore
             .collection(COLLECTION_NAME)
-            .where('loserUserId', '==', userId)
-            .orderBy('timestamp', 'desc')
+            .where('participants.loser.userId', '==', userId)
+            .orderBy('metadata.timestamp', 'desc')
             .limit(limit);
 
         const [winnerSnapshot, loserSnapshot] = await Promise.all([
@@ -79,41 +96,23 @@ export const battleHistoryService = {
 
         // Sort by timestamp descending and limit results
         return battles
-            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+            .sort((a, b) => b.metadata.timestamp.toMillis() - a.metadata.timestamp.toMillis())
             .slice(0, limit);
     },
 
     async getBattleHistoryForImage(imageId: string, limit: number = 50): Promise<BattleHistory[]> {
-        const winnerQuery = firestore
+        // Single, efficient query using the new array field
+        const snap = await firestore
             .collection(COLLECTION_NAME)
-            .where('winnerImageId', '==', imageId)
-            .orderBy('timestamp', 'desc')
-            .limit(limit);
-
-        const loserQuery = firestore
-            .collection(COLLECTION_NAME)
-            .where('loserImageId', '==', imageId)
-            .orderBy('timestamp', 'desc')
-            .limit(limit);
-
-        const [winnerSnapshot, loserSnapshot] = await Promise.all([
-            winnerQuery.get(),
-            loserQuery.get(),
-        ]);
+            .where('participants.imageIds', 'array-contains', imageId)
+            .orderBy('metadata.timestamp', 'desc')
+            .limit(limit)
+            .get();
 
         const battles: BattleHistory[] = [];
-
-        winnerSnapshot.forEach((doc) => {
+        snap.forEach((doc) => {
             battles.push(doc.data() as BattleHistory);
         });
-
-        loserSnapshot.forEach((doc) => {
-            battles.push(doc.data() as BattleHistory);
-        });
-
-        // Sort by timestamp descending and limit results
-        return battles
-            .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
-            .slice(0, limit);
+        return battles;
     },
 };
