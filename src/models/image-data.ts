@@ -23,4 +23,5 @@ export interface ImageData {
     glicko: GlickoState; // Glicko-2 rating state
     inPool: boolean; // Whether the image is in the pool for battles
     status?: 'pending' | 'active'; // Upload status
+    randomSeed: number; // Random value (0-1) for efficient random selection
 }

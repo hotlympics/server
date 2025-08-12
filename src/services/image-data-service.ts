@@ -30,6 +30,7 @@ export class ImageDataService {
             glicko: glickoState,
             inPool: false,
             status: options?.status || 'active',
+            randomSeed: Math.random(), // Add random seed for efficient random selection
         };
 
         // Convert Date to Firestore Timestamp for storage
@@ -67,6 +68,7 @@ export class ImageDataService {
             draws: data.draws as number,
             glicko: data.glicko as GlickoState,
             inPool: data.inPool as boolean,
+            randomSeed: data.randomSeed as number,
         };
     }
 
@@ -93,83 +95,88 @@ export class ImageDataService {
             gender?: 'male' | 'female';
         },
     ): Promise<ImageData[] | null> {
-        // Build the query based on criteria
-        let query: FirebaseFirestore.Query = firestore
-            .collection(COLLECTION_NAME)
-            .where('inPool', '==', true); // Only include images actively in the rating pool
-
-        if (criteria.gender !== undefined) {
-            query = query.where('gender', '==', criteria.gender);
-        }
-
-        const snapshot = await query.get();
-
-        if (snapshot.empty || snapshot.size < count) {
-            return null;
-        }
-
-        // Convert all documents to ImageData with proper date conversion
-        const images = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                imageId: data.imageId as string,
-                userId: data.userId as string,
-                imageUrl: data.imageUrl as string,
-                gender: data.gender as 'male' | 'female',
-                dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-                battles: data.battles as number,
-                wins: data.wins as number,
-                losses: data.losses as number,
-                draws: data.draws as number,
-                glicko: data.glicko as GlickoState,
-                inPool: data.inPool as boolean,
-                status: data.status as 'pending' | 'active' | undefined,
-            };
-        });
-
-        // Group images by userId
-        const imagesByUser = new Map<string, ImageData[]>();
-        images.forEach((image: ImageData) => {
-            const userImages = imagesByUser.get(image.userId) || [];
-            userImages.push(image);
-            imagesByUser.set(image.userId, userImages);
-        });
-
-        // Log the maximum possible count (number of unique users)
-        const maxPossibleCount = imagesByUser.size;
-        console.log(
-            `[getRandomImages] Max possible count (unique users): ${maxPossibleCount}, Requested: ${count}, Criteria: ${JSON.stringify(criteria)}`,
-        );
-
-        // If we don't have enough different users with images which meet the criteria,
-        // we can't fulfill the request
-        if (imagesByUser.size < count) {
-            return null;
-        }
-
-        const users = Array.from(imagesByUser.keys());
         const selectedImages: ImageData[] = [];
-        const selectedUserIndices = new Set<number>();
+        const usedUserIds = new Set<string>();
+        
+        console.log(`[getRandomImages] Requesting ${count} images with criteria:`, criteria);
 
-        // Select images from different users
         while (selectedImages.length < count) {
-            let userIndex = Math.floor(Math.random() * users.length);
+            let image: ImageData | null = null;
+            let attempts = 0;
+            const maxAttempts = 10;
+            
+            // Try to find an image from an unused user
+            while (!image && attempts < maxAttempts) {
+                const randomValue = Math.random();
+                
+                // Build query with random threshold
+                let query: FirebaseFirestore.Query = firestore
+                    .collection(COLLECTION_NAME)
+                    .where('inPool', '==', true)
+                    .where('randomSeed', '>=', randomValue);
 
-            // Find a user we haven't selected yet
-            while (selectedUserIndices.has(userIndex)) {
-                userIndex = Math.floor(Math.random() * users.length);
+                if (criteria.gender !== undefined) {
+                    query = query.where('gender', '==', criteria.gender);
+                }
+
+                // Exclude already used users (Firestore 'not-in' has max 10 items)
+                if (usedUserIds.size > 0 && usedUserIds.size <= 10) {
+                    query = query.where('userId', 'not-in', Array.from(usedUserIds));
+                }
+
+                const snapshot = await query
+                    .orderBy('randomSeed')
+                    .limit(1)
+                    .get();
+
+                if (!snapshot.empty) {
+                    const candidate = this.convertDocToImageData(snapshot.docs[0]);
+                    
+                    // Double-check user uniqueness (in case we couldn't use not-in)
+                    if (!usedUserIds.has(candidate.userId)) {
+                        image = candidate;
+                        usedUserIds.add(candidate.userId);
+                        console.log(`[getRandomImages] Selected image ${candidate.imageId} from user ${candidate.userId} (attempt ${attempts + 1})`);
+                    }
+                }
+                
+                attempts++;
             }
-
-            selectedUserIndices.add(userIndex);
-            const userId = users[userIndex];
-            const userImages = imagesByUser.get(userId)!;
-
-            // Randomly select one image from this user
-            const image = userImages[Math.floor(Math.random() * userImages.length)];
-            selectedImages.push(image);
+            
+            if (image) {
+                selectedImages.push(image);
+            } else {
+                console.warn(`[getRandomImages] Could not find unique image after ${maxAttempts} attempts. Found ${selectedImages.length}/${count} images.`);
+                break; // Couldn't find enough unique users
+            }
         }
 
+        if (selectedImages.length < count) {
+            console.warn(`[getRandomImages] Only found ${selectedImages.length} images, requested ${count}. Not enough unique users with images matching criteria.`);
+            return null;
+        }
+
+        console.log(`[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`);
         return selectedImages;
+    }
+
+    private convertDocToImageData(doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData {
+        const data = doc.data();
+        return {
+            imageId: data.imageId as string,
+            userId: data.userId as string,
+            imageUrl: data.imageUrl as string,
+            gender: data.gender as 'male' | 'female',
+            dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
+            battles: data.battles as number,
+            wins: data.wins as number,
+            losses: data.losses as number,
+            draws: data.draws as number,
+            glicko: data.glicko as GlickoState,
+            inPool: data.inPool as boolean,
+            status: data.status as 'pending' | 'active' | undefined,
+            randomSeed: data.randomSeed as number,
+        };
     }
 
     async updateImageStatus(
@@ -211,6 +218,7 @@ export class ImageDataService {
                 glicko: data.glicko as GlickoState, // All images now have glicko objects
                 inPool: data.inPool as boolean,
                 status: data.status as 'pending' | 'active',
+                randomSeed: data.randomSeed as number,
             };
         });
     }
