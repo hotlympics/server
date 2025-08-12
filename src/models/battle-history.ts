@@ -2,7 +2,7 @@ import { Timestamp } from '@google-cloud/firestore';
 
 export interface BattleHistory {
     battleId: string;
-    
+
     participants: {
         winner: {
             imageId: string;

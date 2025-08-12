@@ -97,7 +97,9 @@ export class ImageDataService {
     ): Promise<ImageData[] | null> {
         // Ensure count doesn't exceed Firestore's not-in limit
         if (count > 10) {
-            throw new Error(`Cannot request more than 10 images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`);
+            throw new Error(
+                `Cannot request more than 10 images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`,
+            );
         }
 
         const selectedImages: ImageData[] = [];
@@ -129,10 +131,7 @@ export class ImageDataService {
                     query = query.where('userId', 'not-in', Array.from(usedUserIds));
                 }
 
-                const snapshot = await query
-                    .orderBy('randomSeed')
-                    .limit(1)
-                    .get();
+                const snapshot = await query.orderBy('randomSeed').limit(1).get();
 
                 if (!snapshot.empty) {
                     const candidate = this.convertDocToImageData(snapshot.docs[0]);
@@ -150,17 +149,23 @@ export class ImageDataService {
             if (image) {
                 selectedImages.push(image);
             } else {
-                console.warn(`[getRandomImages] Could not find unique image after ${maxAttempts} attempts. Found ${selectedImages.length}/${count} images.`);
+                console.warn(
+                    `[getRandomImages] Could not find unique image after ${maxAttempts} attempts. Found ${selectedImages.length}/${count} images.`,
+                );
                 break; // Couldn't find enough unique users
             }
         }
 
         if (selectedImages.length < count) {
-            console.warn(`[getRandomImages] Only found ${selectedImages.length} images, requested ${count}. Not enough unique users with images matching criteria.`);
+            console.warn(
+                `[getRandomImages] Only found ${selectedImages.length} images, requested ${count}. Not enough unique users with images matching criteria.`,
+            );
             return null;
         }
 
-        console.log(`[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`);
+        console.log(
+            `[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`,
+        );
         return selectedImages;
     }
 

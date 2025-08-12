@@ -112,7 +112,9 @@ const enhanceBattlesWithEmails = async (battles: BattleHistory[]): Promise<Enhan
         loserRatingAfter: battle.ratings.after.loser.rating,
         loserRdAfter: battle.ratings.after.loser.rd,
         voterId: battle.participants.voterId,
-        voterEmail: battle.participants.voterId ? userEmailMap.get(battle.participants.voterId) : undefined,
+        voterEmail: battle.participants.voterId
+            ? userEmailMap.get(battle.participants.voterId)
+            : undefined,
         timestamp: battle.metadata.timestamp.toDate().toISOString(),
         systemVersion: battle.metadata.systemVersion,
     }));
