@@ -119,8 +119,6 @@ async function needsRegeneration(): Promise<boolean> {
  */
 async function generateLeaderboard(config: LeaderboardConfig): Promise<LeaderboardDocument> {
     try {
-        logger.info(`Generating leaderboard: ${config.key}`);
-
         // Get existing leaderboard metadata if it exists
         const existingLeaderboard = await getLeaderboard(config.key);
 
@@ -130,7 +128,6 @@ async function generateLeaderboard(config: LeaderboardConfig): Promise<Leaderboa
         // Apply all criteria filters dynamically
         for (const [field, value] of Object.entries(config.criteria)) {
             query = query.where(field, '==', value);
-            logger.info(`Applied filter: ${field} == ${value}`);
         }
 
         // Add ordering based on type
@@ -147,7 +144,7 @@ async function generateLeaderboard(config: LeaderboardConfig): Promise<Leaderboa
         const snapshot = await query.get();
 
         if (snapshot.empty) {
-            logger.warn(`No data found for leaderboard: ${config.key}`);
+            // Still create leaderboard with empty entries for consistency
             return createEmptyLeaderboard(config, existingLeaderboard?.metadata);
         }
 
@@ -202,8 +199,6 @@ async function generateLeaderboard(config: LeaderboardConfig): Promise<Leaderboa
 async function saveLeaderboard(key: string, leaderboard: LeaderboardDocument): Promise<void> {
     try {
         await firestore.collection(LEADERBOARD_COLLECTIONS.LEADERBOARDS).doc(key).set(leaderboard);
-
-        logger.info(`Saved leaderboard: ${key}`);
     } catch (error) {
         logger.error(`Error saving leaderboard ${key}:`, error);
         throw error;
@@ -219,8 +214,6 @@ async function updateGlobalMetadata(metadata: GlobalMetadata): Promise<void> {
             .collection(LEADERBOARD_COLLECTIONS.METADATA)
             .doc(METADATA_DOCUMENT_ID)
             .set(metadata);
-
-        logger.info('Updated global metadata');
     } catch (error) {
         logger.error('Error updating global metadata:', error);
         throw error;
