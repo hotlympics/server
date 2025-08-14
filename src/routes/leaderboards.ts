@@ -93,8 +93,6 @@ router.post(
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     async (_req: SchedulerRequest, res: Response): Promise<void> => {
         try {
-            logger.info('Manual leaderboard regeneration requested');
-
             await leaderboardGenerator.forceRegeneration();
 
             res.json({

@@ -14,21 +14,21 @@ async function generateAllLeaderboards(): Promise<void> {
     let successCount = 0;
     let errorCount = 0;
     let lastError: string | undefined;
+    const results: string[] = [];
 
     try {
-        logger.info('Starting leaderboard generation cycle');
-
         // Generate each leaderboard
         for (const config of LEADERBOARD_CONFIG.leaderboards) {
             try {
                 const leaderboard = await leaderboardService.generateLeaderboard(config);
                 await leaderboardService.saveLeaderboard(config.key, leaderboard);
                 successCount++;
-                logger.info(`Successfully generated leaderboard: ${config.key}`);
+                results.push(`${config.key}:${leaderboard.entries.length}`);
             } catch (error) {
                 errorCount++;
                 lastError = error instanceof Error ? error.message : 'Unknown error';
                 logger.error(`Failed to generate leaderboard ${config.key}:`, error);
+                results.push(`${config.key}:ERROR`);
                 // Continue with other leaderboards even if one fails
             }
         }
@@ -54,9 +54,9 @@ async function generateAllLeaderboards(): Promise<void> {
         await leaderboardService.updateGlobalMetadata(globalMetadata);
 
         const duration = Date.now() - startTime;
-        logger.info(
-            `Leaderboard generation completed in ${duration}ms. Success: ${successCount}, Errors: ${errorCount}`,
-        );
+        const status = errorCount === 0 ? '✅' : `⚠️ ${errorCount} errors`;
+
+        logger.info(`Leaderboards regenerated ${status} (${duration}ms): ${results.join(', ')}`);
     } catch (error) {
         logger.error('Fatal error during leaderboard generation:', error);
         throw error;
@@ -87,7 +87,6 @@ async function regenerateIfNeeded(): Promise<boolean> {
  * Force regeneration of all leaderboards
  */
 async function forceRegeneration(): Promise<void> {
-    logger.info('Forcing leaderboard regeneration');
     await generateAllLeaderboards();
 }
 
