@@ -59,6 +59,24 @@
         { "fieldPath": "randomSeed", "order": "ASCENDING" },
         { "fieldPath": "userId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "gender", "order": "ASCENDING" },
+        { "fieldPath": "glicko.rating", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "image-data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "inPool", "order": "ASCENDING" },
+        { "fieldPath": "gender", "order": "ASCENDING" },
+        { "fieldPath": "glicko.rating", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
