@@ -235,7 +235,7 @@ function createEmptyLeaderboard(
     existingMetadata?: LeaderboardMetadata,
 ): LeaderboardDocument {
     const now = new Date().toISOString();
-    
+
     return {
         entries: [],
         metadata: {
@@ -270,7 +270,7 @@ function calculateMetadata(
     const ratings = entries.map((e) => e.rating);
     const averageRating =
         ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-    
+
     const now = new Date().toISOString();
 
     return {
