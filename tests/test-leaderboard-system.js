@@ -14,6 +14,18 @@ async function testLeaderboardSystem() {
     let testsPassed = 0;
     let testsTotal = 0;
 
+    // Get the first available leaderboard key for testing
+    const testLeaderboardKey = LEADERBOARD_CONFIG.leaderboards.length > 0 
+        ? LEADERBOARD_CONFIG.leaderboards[0].key 
+        : null;
+
+    if (!testLeaderboardKey) {
+        console.log('❌ No leaderboards configured - cannot run individual metadata tests');
+        return;
+    }
+
+    console.log(`🎯 Using '${testLeaderboardKey}' as test leaderboard for individual metadata tests\n`);
+
     // Test 1: Configuration validation
     console.log('⚙️ Test 1: Configuration Validation');
     testsTotal++;
@@ -54,11 +66,11 @@ async function testLeaderboardSystem() {
     console.log();
 
     // Test 3: Individual leaderboard metadata before regeneration
-    console.log('📋 Test 3: Individual Metadata (Pre-Regeneration)');
+    console.log(`📋 Test 3: Individual Metadata (Pre-Regeneration) - ${testLeaderboardKey}`);
     testsTotal++;
     let beforeIndividualMeta = null;
     try {
-        const existingLeaderboard = await leaderboardService.getLeaderboard('female_top');
+        const existingLeaderboard = await leaderboardService.getLeaderboard(testLeaderboardKey);
         if (existingLeaderboard) {
             beforeIndividualMeta = existingLeaderboard.metadata;
             console.log(`  Update count: ${beforeIndividualMeta.updateCount}`);
@@ -124,11 +136,11 @@ async function testLeaderboardSystem() {
     console.log();
 
     // Test 7: Individual leaderboard metadata after regeneration
-    console.log('📋 Test 7: Individual Metadata (Post-Regeneration)');
+    console.log(`📋 Test 7: Individual Metadata (Post-Regeneration) - ${testLeaderboardKey}`);
     testsTotal++;
     let afterIndividualMeta = null;
     try {
-        const updatedLeaderboard = await leaderboardService.getLeaderboard('female_top');
+        const updatedLeaderboard = await leaderboardService.getLeaderboard(testLeaderboardKey);
         if (updatedLeaderboard) {
             afterIndividualMeta = updatedLeaderboard.metadata;
             console.log(`  Update count: ${afterIndividualMeta.updateCount}`);
