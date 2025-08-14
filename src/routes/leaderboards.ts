@@ -6,7 +6,10 @@ import { leaderboardService } from '../services/leaderboard-service.js';
 import { leaderboardGenerator } from '../services/leaderboard-generator.js';
 import { LEADERBOARD_CONFIG } from '../config/leaderboard-config.js';
 import { logger } from '../utils/logger.js';
-import { schedulerAuthMiddleware, type SchedulerRequest } from '../middleware/scheduler-auth-middleware.js';
+import {
+    schedulerAuthMiddleware,
+    type SchedulerRequest,
+} from '../middleware/scheduler-auth-middleware.js';
 
 const router = Router();
 
@@ -84,25 +87,29 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction): Promis
  * Force regeneration of all leaderboards
  * Requires scheduler authentication
  */
-// eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.post('/regenerate', schedulerAuthMiddleware, async (_req: SchedulerRequest, res: Response): Promise<void> => {
-    try {
-        logger.info('Manual leaderboard regeneration requested');
+router.post(
+    '/regenerate',
+    schedulerAuthMiddleware,
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    async (_req: SchedulerRequest, res: Response): Promise<void> => {
+        try {
+            logger.info('Manual leaderboard regeneration requested');
 
-        await leaderboardGenerator.forceRegeneration();
+            await leaderboardGenerator.forceRegeneration();
 
-        res.json({
-            success: true,
-            message: 'Leaderboards regenerated successfully',
-            timestamp: new Date().toISOString(),
-        });
-    } catch (error) {
-        logger.error('Error during manual regeneration:', error);
-        res.status(500).json({
-            error: 'Failed to regenerate leaderboards',
-            message: error instanceof Error ? error.message : 'Unknown error',
-        });
-    }
-});
+            res.json({
+                success: true,
+                message: 'Leaderboards regenerated successfully',
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            logger.error('Error during manual regeneration:', error);
+            res.status(500).json({
+                error: 'Failed to regenerate leaderboards',
+                message: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    },
+);
 
 export { router as leaderboardsRouter };
