@@ -52,6 +52,7 @@ async function testLeaderboardSystem() {
         if (beforeGlobalMeta) {
             console.log(`  Config version: ${beforeGlobalMeta.configVersion}`);
             console.log(`  Leaderboard version: ${beforeGlobalMeta.leaderboardVersion || 'NOT SET'}`);
+            console.log(`  Update count: ${beforeGlobalMeta.updateCount || 'NOT SET'}`);
             console.log(`  Last generated: ${beforeGlobalMeta.lastGeneratedAt}`);
             console.log(`  Leaderboard count: ${beforeGlobalMeta.leaderboardCount}`);
             console.log(`  Last run status: ${beforeGlobalMeta.generatorInfo.lastRunStatus}`);
@@ -122,6 +123,7 @@ async function testLeaderboardSystem() {
         if (afterGlobalMeta) {
             console.log(`  Config version: ${afterGlobalMeta.configVersion}`);
             console.log(`  Leaderboard version: ${afterGlobalMeta.leaderboardVersion}`);
+            console.log(`  Update count: ${afterGlobalMeta.updateCount}`);
             console.log(`  Last generated: ${afterGlobalMeta.lastGeneratedAt}`);
             console.log(`  Leaderboard count: ${afterGlobalMeta.leaderboardCount}`);
             console.log(`  Last run status: ${afterGlobalMeta.generatorInfo.lastRunStatus}`);
@@ -208,6 +210,14 @@ async function testLeaderboardSystem() {
         }
 
         // Check update count incremented if we had before data
+        if (beforeGlobalMeta && afterGlobalMeta) {
+            if (afterGlobalMeta.updateCount <= beforeGlobalMeta.updateCount) {
+                versioningIssues.push('Global update count did not increment');
+                versioningCorrect = false;
+            }
+        }
+
+        // Check individual leaderboard update count incremented if we had before data
         if (beforeIndividualMeta && afterIndividualMeta) {
             if (afterIndividualMeta.updateCount <= beforeIndividualMeta.updateCount) {
                 versioningIssues.push('Update count did not increment');
@@ -223,8 +233,9 @@ async function testLeaderboardSystem() {
         if (versioningCorrect) {
             console.log('  ✅ All versioning behavior correct');
             console.log(`    - Global leaderboard version: ${afterGlobalMeta?.leaderboardVersion}`);
+            console.log(`    - Global update count incremented: ✅`);
             console.log(`    - Individual version field removed: ✅`);
-            console.log(`    - Update count incremented: ✅`);
+            console.log(`    - Individual update count incremented: ✅`);
             console.log(`    - firstGeneratedAt preserved: ✅`);
             testsPassed++;
         } else {

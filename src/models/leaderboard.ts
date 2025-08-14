@@ -40,6 +40,7 @@ export interface LeaderboardDocument {
 
 export interface GlobalMetadata {
     lastGeneratedAt: string;
+    updateCount: number;
     configVersion: number;
     leaderboardVersion: number;
     leaderboardCount: number;

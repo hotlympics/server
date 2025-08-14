@@ -33,9 +33,14 @@ async function generateAllLeaderboards(): Promise<void> {
             }
         }
 
+        // Get current global metadata to preserve updateCount
+        const currentGlobalMeta = await leaderboardService.getGlobalMetadata();
+        const currentUpdateCount = currentGlobalMeta?.updateCount || 0;
+
         // Update global metadata
         const globalMetadata: GlobalMetadata = {
             lastGeneratedAt: new Date().toISOString(),
+            updateCount: currentUpdateCount + 1,
             configVersion: LEADERBOARD_CONFIG.version,
             leaderboardVersion: LEADERBOARD_DATA_VERSION,
             leaderboardCount: LEADERBOARD_CONFIG.leaderboards.length,
