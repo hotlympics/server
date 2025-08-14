@@ -6,6 +6,7 @@ import { leaderboardService } from '../services/leaderboard-service.js';
 import { leaderboardGenerator } from '../services/leaderboard-generator.js';
 import { LEADERBOARD_CONFIG } from '../config/leaderboard-config.js';
 import { logger } from '../utils/logger.js';
+import { schedulerAuthMiddleware, type SchedulerRequest } from '../middleware/scheduler-auth-middleware.js';
 
 const router = Router();
 
@@ -81,10 +82,10 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction): Promis
 /**
  * POST /leaderboards/regenerate
  * Force regeneration of all leaderboards
- * TODO: Add authentication middleware for admin access
+ * Requires scheduler authentication
  */
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.post('/regenerate', async (_req: Request, res: Response): Promise<void> => {
+router.post('/regenerate', schedulerAuthMiddleware, async (_req: SchedulerRequest, res: Response): Promise<void> => {
     try {
         logger.info('Manual leaderboard regeneration requested');
 
