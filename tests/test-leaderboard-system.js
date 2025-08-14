@@ -8,7 +8,35 @@ import { leaderboardGenerator } from '../dist/services/leaderboard-generator.js'
 import { leaderboardService } from '../dist/services/leaderboard-service.js';
 import { LEADERBOARD_CONFIG } from '../dist/config/leaderboard-config.js';
 
-console.log('🏆 Comprehensive Leaderboard System Test\n');
+// HTTP testing function
+async function makeRequest(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        const data = await response.text();
+        
+        let parsedData;
+        try {
+            parsedData = JSON.parse(data);
+        } catch {
+            parsedData = data;
+        }
+
+        return {
+            status: response.status,
+            data: parsedData,
+            success: response.ok
+        };
+    } catch (error) {
+        return {
+            status: 0,
+            data: { error: error.message },
+            success: false
+        };
+    }
+}
+
+console.log('🏆 Comprehensive Leaderboard System Test');
+console.log('Tests both internal services AND HTTP endpoints\n');
 
 async function testLeaderboardSystem() {
     let testsPassed = 0;
@@ -244,6 +272,86 @@ async function testLeaderboardSystem() {
         }
     } catch (error) {
         console.log(`  ❌ Versioning validation failed: ${error.message}`);
+    }
+    console.log();
+
+    // Test 10: HTTP Endpoints (assuming server is running on localhost:3000)
+    console.log('🌐 Test 10: HTTP Endpoint Validation');
+    testsTotal++;
+    try {
+        const SERVER_URL = 'http://localhost:3000';
+        let httpTestsPassed = 0;
+        let httpTestsTotal = 0;
+        
+        console.log(`  Testing against: ${SERVER_URL}`);
+        
+        // Test 10a: GET /leaderboards (list all)
+        httpTestsTotal++;
+        console.log('  📋 Testing GET /leaderboards...');
+        const listResponse = await makeRequest(`${SERVER_URL}/leaderboards`);
+        if (listResponse.success && listResponse.status === 200) {
+            console.log(`    ✅ Status: 200, Found ${listResponse.data.leaderboards?.length || 0} leaderboards`);
+            httpTestsPassed++;
+        } else {
+            console.log(`    ❌ Status: ${listResponse.status} - ${listResponse.data.error || 'Failed'}`);
+        }
+        
+        // Test 10b: GET /leaderboards/:key (specific leaderboard)
+        if (testLeaderboardKey && listResponse.success) {
+            httpTestsTotal++;
+            console.log(`  📊 Testing GET /leaderboards/${testLeaderboardKey}...`);
+            const specificResponse = await makeRequest(`${SERVER_URL}/leaderboards/${testLeaderboardKey}`);
+            if (specificResponse.success && specificResponse.status === 200) {
+                const entries = specificResponse.data.entries?.length || 0;
+                const avgRating = Math.round(specificResponse.data.metadata?.averageRating || 0);
+                console.log(`    ✅ Status: 200, ${entries} entries, avg rating ${avgRating}`);
+                
+                // Validate entry structure
+                const firstEntry = specificResponse.data.entries?.[0];
+                if (firstEntry) {
+                    const hasRequiredFields = firstEntry.imageId && firstEntry.imageUrl && firstEntry.rating !== undefined;
+                    console.log(`    ${hasRequiredFields ? '✅' : '❌'} Entry structure validation`);
+                }
+                httpTestsPassed++;
+            } else {
+                console.log(`    ❌ Status: ${specificResponse.status} - ${specificResponse.data.error || 'Failed'}`);
+            }
+        }
+        
+        // Test 10c: GET /leaderboards/invalid_key (error handling)
+        httpTestsTotal++;
+        console.log('  🚫 Testing GET /leaderboards/invalid_key...');
+        const invalidResponse = await makeRequest(`${SERVER_URL}/leaderboards/invalid_key`);
+        if (invalidResponse.status === 404) {
+            console.log('    ✅ Status: 404 (Correctly rejected invalid key)');
+            httpTestsPassed++;
+        } else {
+            console.log(`    ❌ Status: ${invalidResponse.status} (Should be 404)`);
+        }
+        
+        // Test 10d: GET /health (server connectivity)
+        httpTestsTotal++;
+        console.log('  💚 Testing GET /health...');
+        const healthResponse = await makeRequest(`${SERVER_URL}/health`);
+        if (healthResponse.success) {
+            console.log('    ✅ Server is responding');
+            httpTestsPassed++;
+        } else {
+            console.log(`    ❌ Server not responding: ${healthResponse.data.error || 'Unknown error'}`);
+        }
+        
+        console.log(`  HTTP Tests: ${httpTestsPassed}/${httpTestsTotal} passed`);
+        
+        if (httpTestsPassed === httpTestsTotal) {
+            console.log('  ✅ All HTTP endpoints working correctly');
+            testsPassed++;
+        } else {
+            console.log('  ❌ Some HTTP endpoints failed - ensure server is running');
+        }
+        
+    } catch (error) {
+        console.log(`  ❌ HTTP endpoint testing failed: ${error.message}`);
+        console.log('  💡 Make sure the server is running: npm run dev');
     }
     console.log();
 
