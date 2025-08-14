@@ -13,4 +13,6 @@ export const COLLECTIONS = {
     USERS: 'users',
     IMAGE_DATA: 'image-data',
     BATTLES: 'battles',
+    LEADERBOARDS: 'leaderboards',
+    LEADERBOARDS_META: 'leaderboards_meta',
 } as const;

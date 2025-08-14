@@ -5,6 +5,7 @@ import imagesRouter from './images.js';
 import userRouter from './user.js';
 import ratingsRouter from './ratings.js';
 import adminRouter from './admin.js';
+import { leaderboardsRouter } from './leaderboards.js';
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use('/images', imagesRouter);
 router.use('/user', userRouter);
 router.use('/ratings', ratingsRouter);
 router.use('/admin', adminRouter);
+router.use('/leaderboards', leaderboardsRouter);
 
 export default router;
