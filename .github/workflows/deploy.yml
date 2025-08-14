@@ -70,6 +70,7 @@ jobs:
           ADMIN_USERNAME: "${{ secrets.ADMIN_USERNAME }}"
           ADMIN_PASSWORD: "${{ secrets.ADMIN_PASSWORD }}"
           ADMIN_JWT_SECRET: "${{ secrets.ADMIN_JWT_SECRET }}"
+          SCHEDULER_API_KEY: "${{ secrets.SCHEDULER_API_KEY }}"
           EOF
 
       # Deploy to Cloud Run with environment variables
