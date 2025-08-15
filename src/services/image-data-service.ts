@@ -127,8 +127,9 @@ export class ImageDataService {
                 }
 
                 // Exclude already used users (Firestore 'not-in' has max 10 items)
-                if (usedUserIds.size > 0 && usedUserIds.size <= 10) {
-                    query = query.where('userId', 'not-in', Array.from(usedUserIds));
+                const excludedUsers = Array.from(usedUserIds).slice(0, 10);
+                if (excludedUsers.length > 0) {
+                    query = query.where('userId', 'not-in', excludedUsers);
                 }
 
                 const snapshot = await query.orderBy('randomSeed').limit(1).get();
@@ -166,6 +167,7 @@ export class ImageDataService {
         console.log(
             `[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`,
         );
+        
         return selectedImages;
     }
 
