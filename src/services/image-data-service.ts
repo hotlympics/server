@@ -167,7 +167,7 @@ export class ImageDataService {
         console.log(
             `[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`,
         );
-        
+
         return selectedImages;
     }
 
