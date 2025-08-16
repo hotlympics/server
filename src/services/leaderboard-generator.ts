@@ -75,7 +75,6 @@ async function regenerateIfNeeded(): Promise<boolean> {
             return true;
         }
 
-        logger.info('Leaderboards are up to date');
         return false;
     } catch (error) {
         logger.error('Error during regeneration check:', error);
