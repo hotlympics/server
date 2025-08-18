@@ -16,7 +16,7 @@ const startServer = (): void => {
 
         const app = createApp();
 
-        const server = app.listen(PORT, () => {
+        const server = app.listen(PORT, '0.0.0.0', () => {
             logger.log('=================================');
             logger.log('Server Starting...');
             logger.log('=================================');
@@ -26,7 +26,7 @@ const startServer = (): void => {
             logger.log('=================================');
             logger.log(`Server running on port ${PORT}`);
             logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-            logger.log(`Health check: http://localhost:${PORT}/health`);
+            logger.log(`Health check: http://0.0.0.0:${PORT}/health`);
             logger.log(`Started at: ${new Date().toISOString()}`);
         });
 
