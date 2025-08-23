@@ -313,16 +313,18 @@ export class UserService {
                 // Email exists - check if it belongs to the same Firebase user
                 const existingUser = emailQuery.docs[0];
                 const existingData = existingUser.data() as UserDocument;
-                
+
                 if (existingData.firebaseUid && existingData.firebaseUid !== data.firebaseUid) {
                     // Email belongs to DIFFERENT Firebase user - this is a conflict
-                    throw new Error(`Email ${data.email} is already associated with a different user account`);
+                    throw new Error(
+                        `Email ${data.email} is already associated with a different user account`,
+                    );
                 }
-                
+
                 if (!existingData.firebaseUid || existingData.firebaseUid === '') {
                     // Email exists but no Firebase UID set (legacy user) - update it
                     transaction.update(existingUser.ref, { firebaseUid: data.firebaseUid });
-                    
+
                     return {
                         id: existingUser.id,
                         firebaseUid: data.firebaseUid,
