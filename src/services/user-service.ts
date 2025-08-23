@@ -299,42 +299,50 @@ export class UserService {
             );
 
             if (!firebaseUidQuery.empty) {
-                // User already exists with this Firebase UID
+                // User already exists with this Firebase UID - return it
                 const doc = firebaseUidQuery.docs[0];
                 return this.documentToUser(doc)!;
             }
 
-            // Next, try to find by email to prevent duplicate emails
+            // Next, check if email exists with a DIFFERENT Firebase UID
             const emailQuery = await transaction.get(
                 this.collection.where('email', '==', data.email).limit(1),
             );
 
             if (!emailQuery.empty) {
-                // User exists with this email but different Firebase UID
-                // Update the existing user with the new Firebase UID
-                const doc = emailQuery.docs[0];
-                transaction.update(doc.ref, { firebaseUid: data.firebaseUid });
-
-                const existingData = doc.data() as UserDocument;
-                return {
-                    id: doc.id,
-                    firebaseUid: data.firebaseUid, // Use the new Firebase UID
-                    email: existingData.email,
-                    googleId: existingData.googleId,
-                    gender: existingData.gender,
-                    dateOfBirth: existingData.dateOfBirth
-                        ? existingData.dateOfBirth.toDate()
-                        : null,
-                    tosVersion: existingData.tosVersion || null,
-                    tosAcceptedAt: existingData.tosAcceptedAt
-                        ? existingData.tosAcceptedAt.toDate()
-                        : null,
-                    rateCount: existingData.rateCount,
-                    uploadedImageIds: existingData.uploadedImageIds || [],
-                    poolImageIds: existingData.poolImageIds || [],
-                    displayName: existingData.displayName,
-                    photoUrl: existingData.photoUrl,
-                };
+                // Email exists - check if it belongs to the same Firebase user
+                const existingUser = emailQuery.docs[0];
+                const existingData = existingUser.data() as UserDocument;
+                
+                if (existingData.firebaseUid && existingData.firebaseUid !== data.firebaseUid) {
+                    // Email belongs to DIFFERENT Firebase user - this is a conflict
+                    throw new Error(`Email ${data.email} is already associated with a different user account`);
+                }
+                
+                if (!existingData.firebaseUid || existingData.firebaseUid === '') {
+                    // Email exists but no Firebase UID set (legacy user) - update it
+                    transaction.update(existingUser.ref, { firebaseUid: data.firebaseUid });
+                    
+                    return {
+                        id: existingUser.id,
+                        firebaseUid: data.firebaseUid,
+                        email: existingData.email,
+                        googleId: existingData.googleId,
+                        gender: existingData.gender,
+                        dateOfBirth: existingData.dateOfBirth
+                            ? existingData.dateOfBirth.toDate()
+                            : null,
+                        tosVersion: existingData.tosVersion || null,
+                        tosAcceptedAt: existingData.tosAcceptedAt
+                            ? existingData.tosAcceptedAt.toDate()
+                            : null,
+                        rateCount: existingData.rateCount,
+                        uploadedImageIds: existingData.uploadedImageIds || [],
+                        poolImageIds: existingData.poolImageIds || [],
+                        displayName: existingData.displayName,
+                        photoUrl: existingData.photoUrl,
+                    };
+                }
             }
 
             // No existing user found, create a new one
