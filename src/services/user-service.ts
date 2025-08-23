@@ -1,4 +1,5 @@
-import { firestore, COLLECTIONS } from '../config/firestore.js';
+import { firestore } from '../config/firebase-admin.js';
+import { COLLECTIONS } from '../config/firestore.js';
 import type { User } from '../types/user.js';
 import { Timestamp, FieldValue } from '@google-cloud/firestore';
 
@@ -45,22 +46,51 @@ export class UserService {
     }
 
     static async createUser(userData: Omit<User, 'id'>): Promise<User> {
-        const documentData: UserDocument = {
-            ...userData,
-            dateOfBirth: userData.dateOfBirth ? Timestamp.fromDate(userData.dateOfBirth) : null,
-            tosAcceptedAt: userData.tosAcceptedAt
-                ? Timestamp.fromDate(userData.tosAcceptedAt)
-                : null,
-        };
+        // Use a transaction to ensure atomicity and prevent duplicate users by email
+        const result = await firestore.runTransaction(async (transaction) => {
+            // Check if a user with this email already exists
+            const emailQuery = await transaction.get(
+                this.collection.where('email', '==', userData.email).limit(1),
+            );
 
-        const docRef = await this.collection.add(documentData);
+            if (!emailQuery.empty) {
+                // User with this email already exists, throw an error
+                throw new Error(`User with email ${userData.email} already exists`);
+            }
 
-        const user: User = {
-            id: docRef.id,
-            ...userData,
-        };
+            // If firebaseUid is provided, check for duplicates by Firebase UID
+            if (userData.firebaseUid) {
+                const firebaseUidQuery = await transaction.get(
+                    this.collection.where('firebaseUid', '==', userData.firebaseUid).limit(1),
+                );
 
-        return user;
+                if (!firebaseUidQuery.empty) {
+                    // User with this Firebase UID already exists, throw an error
+                    throw new Error(
+                        `User with Firebase UID ${userData.firebaseUid} already exists`,
+                    );
+                }
+            }
+
+            // No existing user found, create a new one
+            const documentData: UserDocument = {
+                ...userData,
+                dateOfBirth: userData.dateOfBirth ? Timestamp.fromDate(userData.dateOfBirth) : null,
+                tosAcceptedAt: userData.tosAcceptedAt
+                    ? Timestamp.fromDate(userData.tosAcceptedAt)
+                    : null,
+            };
+
+            const newDocRef = this.collection.doc(); // Create a new document reference
+            transaction.set(newDocRef, documentData);
+
+            return {
+                id: newDocRef.id,
+                ...userData,
+            };
+        });
+
+        return result;
     }
 
     static async getUserById(id: string): Promise<User | null> {
@@ -261,28 +291,98 @@ export class UserService {
         displayName?: string | null;
         photoUrl?: string | null;
     }): Promise<User> {
-        const newUserData: UserDocument = {
-            firebaseUid: data.firebaseUid,
-            email: data.email,
-            googleId: null,
-            gender: 'unknown',
-            dateOfBirth: null,
-            tosVersion: null,
-            tosAcceptedAt: null,
-            rateCount: 0,
-            uploadedImageIds: [],
-            poolImageIds: [],
-            displayName: data.displayName || null,
-            photoUrl: data.photoUrl || null,
-        };
+        // Use a transaction to ensure atomicity and prevent duplicate users
+        const result = await firestore.runTransaction(async (transaction) => {
+            // First, try to find by Firebase UID
+            const firebaseUidQuery = await transaction.get(
+                this.collection.where('firebaseUid', '==', data.firebaseUid).limit(1),
+            );
 
-        const docRef = await this.collection.add(newUserData);
+            if (!firebaseUidQuery.empty) {
+                // User already exists with this Firebase UID - return it
+                const doc = firebaseUidQuery.docs[0];
+                return this.documentToUser(doc)!;
+            }
 
-        return {
-            id: docRef.id,
-            ...newUserData,
-            dateOfBirth: null,
-            tosAcceptedAt: null,
-        };
+            // Next, check if email exists with a DIFFERENT Firebase UID
+            const emailQuery = await transaction.get(
+                this.collection.where('email', '==', data.email).limit(1),
+            );
+
+            if (!emailQuery.empty) {
+                // Email exists - check if it belongs to the same Firebase user
+                const existingUser = emailQuery.docs[0];
+                const existingData = existingUser.data() as UserDocument;
+
+                if (existingData.firebaseUid && existingData.firebaseUid !== data.firebaseUid) {
+                    // Email belongs to DIFFERENT Firebase user - this is a conflict
+                    throw new Error(
+                        `Email ${data.email} is already associated with a different user account`,
+                    );
+                }
+
+                if (!existingData.firebaseUid || existingData.firebaseUid === '') {
+                    // Email exists but no Firebase UID set (legacy user) - update it
+                    transaction.update(existingUser.ref, { firebaseUid: data.firebaseUid });
+
+                    return {
+                        id: existingUser.id,
+                        firebaseUid: data.firebaseUid,
+                        email: existingData.email,
+                        googleId: existingData.googleId,
+                        gender: existingData.gender,
+                        dateOfBirth: existingData.dateOfBirth
+                            ? existingData.dateOfBirth.toDate()
+                            : null,
+                        tosVersion: existingData.tosVersion || null,
+                        tosAcceptedAt: existingData.tosAcceptedAt
+                            ? existingData.tosAcceptedAt.toDate()
+                            : null,
+                        rateCount: existingData.rateCount,
+                        uploadedImageIds: existingData.uploadedImageIds || [],
+                        poolImageIds: existingData.poolImageIds || [],
+                        displayName: existingData.displayName,
+                        photoUrl: existingData.photoUrl,
+                    };
+                }
+            }
+
+            // No existing user found, create a new one
+            const newUserData: UserDocument = {
+                firebaseUid: data.firebaseUid,
+                email: data.email,
+                googleId: null,
+                gender: 'unknown',
+                dateOfBirth: null,
+                tosVersion: null,
+                tosAcceptedAt: null,
+                rateCount: 0,
+                uploadedImageIds: [],
+                poolImageIds: [],
+                displayName: data.displayName || null,
+                photoUrl: data.photoUrl || null,
+            };
+
+            const newDocRef = this.collection.doc(); // Create a new document reference
+            transaction.set(newDocRef, newUserData);
+
+            return {
+                id: newDocRef.id,
+                firebaseUid: newUserData.firebaseUid,
+                email: newUserData.email,
+                googleId: newUserData.googleId,
+                gender: newUserData.gender,
+                dateOfBirth: null,
+                tosVersion: null,
+                tosAcceptedAt: null,
+                rateCount: newUserData.rateCount,
+                uploadedImageIds: newUserData.uploadedImageIds,
+                poolImageIds: newUserData.poolImageIds,
+                displayName: newUserData.displayName,
+                photoUrl: newUserData.photoUrl,
+            };
+        });
+
+        return result;
     }
 }
