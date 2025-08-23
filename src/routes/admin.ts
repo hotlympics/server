@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '../config/firebase-admin.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { storageService } from '../services/storage-service.js';
@@ -394,7 +394,7 @@ router.get('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Respo
             const { userId } = req.params;
 
             // Get user data
-            const user = await UserService.getUserById(userId);
+            const user = await userService.getUserById(userId);
             if (!user) {
                 res.status(404).json({ error: { message: 'User not found' } });
                 return;
@@ -464,7 +464,7 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
             const { userId } = req.params;
 
             // Get user data first
-            const user = await UserService.getUserById(userId);
+            const user = await userService.getUserById(userId);
             if (!user) {
                 res.status(404).json({ error: { message: 'User not found' } });
                 return;

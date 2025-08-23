@@ -5,7 +5,26 @@ import { glicko2Service } from './glicko2-service.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
 
-export class ImageDataService {
+const convertDocToImageData = (doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData => {
+    const data = doc.data();
+    return {
+        imageId: data.imageId as string,
+        userId: data.userId as string,
+        imageUrl: data.imageUrl as string,
+        gender: data.gender as 'male' | 'female',
+        dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
+        battles: data.battles as number,
+        wins: data.wins as number,
+        losses: data.losses as number,
+        draws: data.draws as number,
+        glicko: data.glicko as GlickoState,
+        inPool: data.inPool as boolean,
+        status: data.status as 'pending' | 'active' | undefined,
+        randomSeed: data.randomSeed as number,
+    };
+};
+
+export const imageDataService = {
     async createImageData(
         imageId: string,
         userId: string,
@@ -42,7 +61,7 @@ export class ImageDataService {
 
         await firestore.collection(COLLECTION_NAME).doc(imageId).set(documentData);
         return stats;
-    }
+    },
 
     async getRandomImages(
         count: number,
@@ -90,7 +109,7 @@ export class ImageDataService {
                 const snapshot = await query.orderBy('randomSeed').limit(1).get();
 
                 if (!snapshot.empty) {
-                    const candidate = this.convertDocToImageData(snapshot.docs[0]);
+                    const candidate = convertDocToImageData(snapshot.docs[0]);
 
                     // Double-check user uniqueness (in case we couldn't use not-in)
                     if (!usedUserIds.has(candidate.userId)) {
@@ -124,26 +143,7 @@ export class ImageDataService {
         );
 
         return selectedImages;
-    }
-
-    private convertDocToImageData(doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData {
-        const data = doc.data();
-        return {
-            imageId: data.imageId as string,
-            userId: data.userId as string,
-            imageUrl: data.imageUrl as string,
-            gender: data.gender as 'male' | 'female',
-            dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-            battles: data.battles as number,
-            wins: data.wins as number,
-            losses: data.losses as number,
-            draws: data.draws as number,
-            glicko: data.glicko as GlickoState,
-            inPool: data.inPool as boolean,
-            status: data.status as 'pending' | 'active' | undefined,
-            randomSeed: data.randomSeed as number,
-        };
-    }
+    },
 
     async updateImageStatus(
         imageId: string,
@@ -157,7 +157,7 @@ export class ImageDataService {
             updateData.uploadedAt = Timestamp.fromDate(updates.uploadedAt);
         }
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updateData);
-    }
+    },
 
     /**
      * Transactionally update pool status for multiple images and user's poolImageIds array
@@ -184,7 +184,7 @@ export class ImageDataService {
 
             return Promise.resolve();
         });
-    }
+    },
 
     /**
      * Transactionally add images to user's pool during admin user creation
@@ -209,7 +209,7 @@ export class ImageDataService {
 
             return Promise.resolve();
         });
-    }
+    },
 
     /**
      * Transactionally toggle a single image's pool status
@@ -237,7 +237,5 @@ export class ImageDataService {
 
             return Promise.resolve();
         });
-    }
-}
-
-export const imageDataService = new ImageDataService();
+    },
+};

@@ -3,7 +3,7 @@ import {
     firebaseAuthMiddleware,
     type AuthRequest,
 } from '../middleware/firebase-auth-middleware.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { CURRENT_TOS_VERSION } from '../config/tos-config.js';
 
@@ -81,7 +81,7 @@ router.put('/profile', firebaseAuthMiddleware, (req: AuthRequest, res: Response)
             }
 
             // Update user
-            const updatedUser = await UserService.updateUser(userId, {
+            const updatedUser = await userService.updateUser(userId, {
                 gender: gender || req.user!.gender,
                 dateOfBirth: dateOfBirthObj || req.user!.dateOfBirth,
             });
@@ -122,7 +122,7 @@ router.post('/accept-tos', firebaseAuthMiddleware, (req: AuthRequest, res: Respo
             }
 
             // Update user with TOS acceptance
-            const updatedUser = await UserService.updateUser(userId, {
+            const updatedUser = await userService.updateUser(userId, {
                 tosVersion: CURRENT_TOS_VERSION,
                 tosAcceptedAt: new Date(),
             });
@@ -192,7 +192,7 @@ router.put('/pool', firebaseAuthMiddleware, (req: AuthRequest, res: Response): v
             await imageDataService.updateUserPoolStatus(userId, poolImageIds, updates);
 
             // Get updated user data to return
-            const updatedUser = await UserService.getUserById(userId);
+            const updatedUser = await userService.getUserById(userId);
 
             res.json(updatedUser);
         } catch (error) {

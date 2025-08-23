@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { type AuthRequest } from '../middleware/firebase-auth-middleware.js';
 import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 import { ratingService } from '../services/rating-service.js';
 import { logger } from '../utils/logger.js';
 
@@ -53,7 +53,7 @@ router.post(
             }
 
             if (req.user?.id) {
-                await UserService.incrementRateCount(req.user.id);
+                await userService.incrementRateCount(req.user.id);
             }
 
             res.json({
