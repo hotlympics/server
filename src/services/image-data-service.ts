@@ -44,51 +44,6 @@ export class ImageDataService {
         return stats;
     }
 
-    async getImageData(imageId: string): Promise<ImageData | null> {
-        const doc = await firestore.collection(COLLECTION_NAME).doc(imageId).get();
-        if (!doc.exists) {
-            return null;
-        }
-
-        const data = doc.data();
-        if (!data) {
-            return null;
-        }
-
-        // Convert Firestore Timestamp to Date
-        return {
-            imageId: data.imageId as string,
-            userId: data.userId as string,
-            imageUrl: data.imageUrl as string,
-            gender: data.gender as 'male' | 'female',
-            dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-            battles: data.battles as number,
-            wins: data.wins as number,
-            losses: data.losses as number,
-            draws: data.draws as number,
-            glicko: data.glicko as GlickoState,
-            inPool: data.inPool as boolean,
-            randomSeed: data.randomSeed as number,
-        };
-    }
-
-    async updatePoolStatus(imageId: string, inPool: boolean): Promise<void> {
-        await firestore.collection(COLLECTION_NAME).doc(imageId).update({ inPool });
-    }
-
-    async batchUpdatePoolStatus(
-        updates: Array<{ imageId: string; inPool: boolean }>,
-    ): Promise<void> {
-        const batch = firestore.batch();
-
-        for (const { imageId, inPool } of updates) {
-            const docRef = firestore.collection(COLLECTION_NAME).doc(imageId);
-            batch.update(docRef, { inPool });
-        }
-
-        await batch.commit();
-    }
-
     async getRandomImages(
         count: number,
         criteria: {
@@ -202,36 +157,6 @@ export class ImageDataService {
             updateData.uploadedAt = Timestamp.fromDate(updates.uploadedAt);
         }
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updateData);
-    }
-
-    async getPendingUploads(olderThanMinutes: number): Promise<ImageData[]> {
-        const cutoffTime = new Date();
-        cutoffTime.setMinutes(cutoffTime.getMinutes() - olderThanMinutes);
-
-        const snapshot = await firestore
-            .collection(COLLECTION_NAME)
-            .where('status', '==', 'pending')
-            .where('createdAt', '<', Timestamp.fromDate(cutoffTime))
-            .get();
-
-        return snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                imageId: data.imageId as string,
-                userId: data.userId as string,
-                imageUrl: data.imageUrl as string,
-                gender: data.gender as 'male' | 'female',
-                dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-                battles: data.battles as number,
-                wins: data.wins as number,
-                losses: data.losses as number,
-                draws: data.draws as number,
-                glicko: data.glicko as GlickoState, // All images now have glicko objects
-                inPool: data.inPool as boolean,
-                status: data.status as 'pending' | 'active',
-                randomSeed: data.randomSeed as number,
-            };
-        });
     }
 }
 

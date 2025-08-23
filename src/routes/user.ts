@@ -4,8 +4,9 @@ import {
     type AuthRequest,
 } from '../middleware/firebase-auth-middleware.js';
 import { UserService } from '../services/user-service.js';
-import { imageDataService } from '../services/image-data-service.js';
 import { CURRENT_TOS_VERSION } from '../config/tos-config.js';
+import { firestore, COLLECTIONS } from '../config/firestore.js';
+import { Transaction } from '@google-cloud/firestore';
 
 const router = Router();
 
@@ -188,15 +189,26 @@ router.put('/pool', firebaseAuthMiddleware, (req: AuthRequest, res: Response): v
                 ...toRemoveFromPool.map((imageId) => ({ imageId, inPool: false })),
             ];
 
-            // Update Firestore image documents if there are changes
-            if (updates.length > 0) {
-                await imageDataService.batchUpdatePoolStatus(updates);
-            }
+            // Use transaction to ensure user document and image documents stay in sync
+            await firestore.runTransaction(async (transaction: Transaction) => {
+                const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
 
-            // Update user's pool selections
-            const updatedUser = await UserService.updateUser(userId, {
-                poolImageIds: poolImageIds,
+                // Update user's pool selections
+                transaction.update(userRef, {
+                    poolImageIds: poolImageIds,
+                });
+
+                // Update each affected image's inPool status
+                updates.forEach(({ imageId, inPool }) => {
+                    const imageRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId);
+                    transaction.update(imageRef, { inPool });
+                });
+
+                return Promise.resolve();
             });
+
+            // Get updated user data to return
+            const updatedUser = await UserService.getUserById(userId);
 
             res.json(updatedUser);
         } catch (error) {
