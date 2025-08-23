@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '../config/firebase-admin.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { storageService } from '../services/storage-service.js';
@@ -357,18 +357,8 @@ router.post(
                         }
 
                         if (poolImageIdsToAdd.length > 0) {
-                            // Update user document with pool image IDs
-                            await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
-                                poolImageIds: poolImageIdsToAdd,
-                            });
-
-                            // Also update the inPool field in the image-data documents
-                            const poolUpdatePromises = poolImageIdsToAdd.map((imageId) =>
-                                firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).update({
-                                    inPool: true,
-                                }),
-                            );
-                            await Promise.all(poolUpdatePromises);
+                            // Use image data service for transactional pool updates
+                            await imageDataService.addImagesToUserPool(userId, poolImageIdsToAdd);
 
                             console.log(
                                 `Added ${poolImageIdsToAdd.length} images to pool for user ${userId}`,
@@ -404,7 +394,7 @@ router.get('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Respo
             const { userId } = req.params;
 
             // Get user data
-            const user = await UserService.getUserById(userId);
+            const user = await userService.getUserById(userId);
             if (!user) {
                 res.status(404).json({ error: { message: 'User not found' } });
                 return;
@@ -474,7 +464,7 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
             const { userId } = req.params;
 
             // Get user data first
-            const user = await UserService.getUserById(userId);
+            const user = await userService.getUserById(userId);
             if (!user) {
                 res.status(404).json({ error: { message: 'User not found' } });
                 return;
@@ -672,15 +662,13 @@ router.put(
                     console.log(`Removing image ${imageId} from pool for user ${userId}`);
                 }
 
-                // Update user document
-                await firestore.collection(COLLECTIONS.USERS).doc(userId).update({
-                    poolImageIds: updatedPoolImageIds,
-                });
-
-                // Also update the inPool field in the image-data document
-                await firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).update({
-                    inPool: addToPool,
-                });
+                // Use image data service for transactional pool toggle
+                await imageDataService.toggleImagePoolStatus(
+                    userId,
+                    imageId,
+                    addToPool,
+                    updatedPoolImageIds,
+                );
 
                 res.json({
                     message: addToPool

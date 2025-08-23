@@ -19,38 +19,38 @@ interface UserDocument {
     photoUrl?: string | null;
 }
 
-export class UserService {
-    private static collection = firestore.collection(COLLECTIONS.USERS);
+const collection = firestore.collection(COLLECTIONS.USERS);
 
-    private static documentToUser(doc: FirebaseFirestore.DocumentSnapshot): User | null {
-        if (!doc.exists) {
-            return null;
-        }
-
-        const data = doc.data() as UserDocument;
-        return {
-            id: doc.id,
-            firebaseUid: data.firebaseUid,
-            email: data.email,
-            googleId: data.googleId,
-            gender: data.gender,
-            dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
-            tosVersion: data.tosVersion || null,
-            tosAcceptedAt: data.tosAcceptedAt ? data.tosAcceptedAt.toDate() : null,
-            rateCount: data.rateCount,
-            uploadedImageIds: data.uploadedImageIds || [],
-            poolImageIds: data.poolImageIds || [],
-            displayName: data.displayName,
-            photoUrl: data.photoUrl,
-        };
+const documentToUser = (doc: FirebaseFirestore.DocumentSnapshot): User | null => {
+    if (!doc.exists) {
+        return null;
     }
 
-    static async createUser(userData: Omit<User, 'id'>): Promise<User> {
+    const data = doc.data() as UserDocument;
+    return {
+        id: doc.id,
+        firebaseUid: data.firebaseUid,
+        email: data.email,
+        googleId: data.googleId,
+        gender: data.gender,
+        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate() : null,
+        tosVersion: data.tosVersion || null,
+        tosAcceptedAt: data.tosAcceptedAt ? data.tosAcceptedAt.toDate() : null,
+        rateCount: data.rateCount,
+        uploadedImageIds: data.uploadedImageIds || [],
+        poolImageIds: data.poolImageIds || [],
+        displayName: data.displayName,
+        photoUrl: data.photoUrl,
+    };
+};
+
+export const userService = {
+    async createUser(userData: Omit<User, 'id'>): Promise<User> {
         // Use a transaction to ensure atomicity and prevent duplicate users by email
         const result = await firestore.runTransaction(async (transaction) => {
             // Check if a user with this email already exists
             const emailQuery = await transaction.get(
-                this.collection.where('email', '==', userData.email).limit(1),
+                collection.where('email', '==', userData.email).limit(1),
             );
 
             if (!emailQuery.empty) {
@@ -61,7 +61,7 @@ export class UserService {
             // If firebaseUid is provided, check for duplicates by Firebase UID
             if (userData.firebaseUid) {
                 const firebaseUidQuery = await transaction.get(
-                    this.collection.where('firebaseUid', '==', userData.firebaseUid).limit(1),
+                    collection.where('firebaseUid', '==', userData.firebaseUid).limit(1),
                 );
 
                 if (!firebaseUidQuery.empty) {
@@ -81,7 +81,7 @@ export class UserService {
                     : null,
             };
 
-            const newDocRef = this.collection.doc(); // Create a new document reference
+            const newDocRef = collection.doc(); // Create a new document reference
             transaction.set(newDocRef, documentData);
 
             return {
@@ -91,41 +91,41 @@ export class UserService {
         });
 
         return result;
-    }
+    },
 
-    static async getUserById(id: string): Promise<User | null> {
-        const doc = await this.collection.doc(id).get();
+    async getUserById(id: string): Promise<User | null> {
+        const doc = await collection.doc(id).get();
 
         if (!doc.exists) {
             return null;
         }
 
-        return this.documentToUser(doc);
-    }
+        return documentToUser(doc);
+    },
 
-    static async getUserByEmail(email: string): Promise<User | null> {
-        const snapshot = await this.collection.where('email', '==', email).limit(1).get();
-
-        if (snapshot.empty) {
-            return null;
-        }
-
-        const doc = snapshot.docs[0];
-        return this.documentToUser(doc);
-    }
-
-    static async getUserByGoogleId(googleId: string): Promise<User | null> {
-        const snapshot = await this.collection.where('googleId', '==', googleId).limit(1).get();
+    async getUserByEmail(email: string): Promise<User | null> {
+        const snapshot = await collection.where('email', '==', email).limit(1).get();
 
         if (snapshot.empty) {
             return null;
         }
 
         const doc = snapshot.docs[0];
-        return this.documentToUser(doc);
-    }
+        return documentToUser(doc);
+    },
 
-    static async updateUser(id: string, updates: Partial<Omit<User, 'id'>>): Promise<User | null> {
+    async getUserByGoogleId(googleId: string): Promise<User | null> {
+        const snapshot = await collection.where('googleId', '==', googleId).limit(1).get();
+
+        if (snapshot.empty) {
+            return null;
+        }
+
+        const doc = snapshot.docs[0];
+        return documentToUser(doc);
+    },
+
+    async updateUser(id: string, updates: Partial<Omit<User, 'id'>>): Promise<User | null> {
         const { dateOfBirth, tosAcceptedAt, ...otherUpdates } = updates;
         const updateData: Partial<UserDocument> = {
             ...otherUpdates,
@@ -139,49 +139,46 @@ export class UserService {
             updateData.tosAcceptedAt = tosAcceptedAt ? Timestamp.fromDate(tosAcceptedAt) : null;
         }
 
-        await this.collection.doc(id).update(updateData);
-        return this.getUserById(id);
-    }
+        await collection.doc(id).update(updateData);
+        return userService.getUserById(id);
+    },
 
-    static async incrementRateCount(id: string): Promise<void> {
-        await this.collection.doc(id).update({
+    async incrementRateCount(id: string): Promise<void> {
+        await collection.doc(id).update({
             rateCount: FieldValue.increment(1),
         });
-    }
+    },
 
-    static async addUploadedImageId(userId: string, imageId: string): Promise<void> {
-        await this.collection.doc(userId).update({
+    async addUploadedImageId(userId: string, imageId: string): Promise<void> {
+        await collection.doc(userId).update({
             uploadedImageIds: FieldValue.arrayUnion(imageId),
         });
-    }
+    },
 
-    static async removeUploadedImageId(userId: string, imageId: string): Promise<void> {
-        await this.collection.doc(userId).update({
+    async removeUploadedImageId(userId: string, imageId: string): Promise<void> {
+        await collection.doc(userId).update({
             uploadedImageIds: FieldValue.arrayRemove(imageId),
         });
-    }
+    },
 
-    static async addPoolImageId(userId: string, imageId: string): Promise<void> {
-        await this.collection.doc(userId).update({
+    async addPoolImageId(userId: string, imageId: string): Promise<void> {
+        await collection.doc(userId).update({
             poolImageIds: FieldValue.arrayUnion(imageId),
         });
-    }
+    },
 
-    static async removePoolImageId(userId: string, imageId: string): Promise<void> {
-        await this.collection.doc(userId).update({
+    async removePoolImageId(userId: string, imageId: string): Promise<void> {
+        await collection.doc(userId).update({
             poolImageIds: FieldValue.arrayRemove(imageId),
         });
-    }
+    },
 
-    static async findOrCreateGoogleUser(googleData: {
-        email: string;
-        googleId: string;
-    }): Promise<User> {
+    async findOrCreateGoogleUser(googleData: { email: string; googleId: string }): Promise<User> {
         // Use a transaction to ensure atomicity
         const result = await firestore.runTransaction(async (transaction) => {
             // First, try to find by googleId
             const googleIdQuery = await transaction.get(
-                this.collection.where('googleId', '==', googleData.googleId).limit(1),
+                collection.where('googleId', '==', googleData.googleId).limit(1),
             );
 
             if (!googleIdQuery.empty) {
@@ -207,7 +204,7 @@ export class UserService {
 
             // Next, try to find by email
             const emailQuery = await transaction.get(
-                this.collection.where('email', '==', googleData.email).limit(1),
+                collection.where('email', '==', googleData.email).limit(1),
             );
 
             if (!emailQuery.empty) {
@@ -249,7 +246,7 @@ export class UserService {
                 photoUrl: null,
             };
 
-            const newDocRef = this.collection.doc(); // Create a new document reference
+            const newDocRef = collection.doc(); // Create a new document reference
             transaction.set(newDocRef, newUserData);
 
             return {
@@ -270,22 +267,19 @@ export class UserService {
         });
 
         return result;
-    }
+    },
 
-    static async getUserByFirebaseUid(firebaseUid: string): Promise<User | null> {
-        const snapshot = await this.collection
-            .where('firebaseUid', '==', firebaseUid)
-            .limit(1)
-            .get();
+    async getUserByFirebaseUid(firebaseUid: string): Promise<User | null> {
+        const snapshot = await collection.where('firebaseUid', '==', firebaseUid).limit(1).get();
 
         if (snapshot.empty) {
             return null;
         }
 
-        return this.documentToUser(snapshot.docs[0]);
-    }
+        return documentToUser(snapshot.docs[0]);
+    },
 
-    static async createUserFromFirebase(data: {
+    async createUserFromFirebase(data: {
         firebaseUid: string;
         email: string;
         displayName?: string | null;
@@ -295,18 +289,18 @@ export class UserService {
         const result = await firestore.runTransaction(async (transaction) => {
             // First, try to find by Firebase UID
             const firebaseUidQuery = await transaction.get(
-                this.collection.where('firebaseUid', '==', data.firebaseUid).limit(1),
+                collection.where('firebaseUid', '==', data.firebaseUid).limit(1),
             );
 
             if (!firebaseUidQuery.empty) {
                 // User already exists with this Firebase UID - return it
                 const doc = firebaseUidQuery.docs[0];
-                return this.documentToUser(doc)!;
+                return documentToUser(doc)!;
             }
 
             // Next, check if email exists with a DIFFERENT Firebase UID
             const emailQuery = await transaction.get(
-                this.collection.where('email', '==', data.email).limit(1),
+                collection.where('email', '==', data.email).limit(1),
             );
 
             if (!emailQuery.empty) {
@@ -363,7 +357,7 @@ export class UserService {
                 photoUrl: data.photoUrl || null,
             };
 
-            const newDocRef = this.collection.doc(); // Create a new document reference
+            const newDocRef = collection.doc(); // Create a new document reference
             transaction.set(newDocRef, newUserData);
 
             return {
@@ -384,5 +378,5 @@ export class UserService {
         });
 
         return result;
-    }
-}
+    },
+};

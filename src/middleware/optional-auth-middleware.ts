@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { admin } from '../config/firebase-admin.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 import { AuthRequest } from './firebase-auth-middleware.js';
 
 export const optionalAuthMiddleware = async (
@@ -35,11 +35,11 @@ export const optionalAuthMiddleware = async (
             }
 
             // Get or create user based on Firebase UID
-            let user = await UserService.getUserByFirebaseUid(decodedToken.uid);
+            let user = await userService.getUserByFirebaseUid(decodedToken.uid);
 
             if (!user) {
                 // Create new user if doesn't exist
-                user = await UserService.createUserFromFirebase({
+                user = await userService.createUserFromFirebase({
                     firebaseUid: decodedToken.uid,
                     email: decodedToken.email || '',
                     displayName: decodedToken.name as string | undefined,

@@ -9,7 +9,7 @@ import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.j
 import { imageDataService } from '../services/image-data-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
-import { UserService } from '../services/user-service.js';
+import { userService } from '../services/user-service.js';
 
 const router = Router();
 
@@ -39,7 +39,7 @@ router.post(
             const { fileExtension = 'jpg' } = req.body as { fileExtension?: string };
 
             // Check user's current photo count from user document
-            const user = await UserService.getUserById(req.user.id);
+            const user = await userService.getUserById(req.user.id);
             if (!user) {
                 res.status(404).json({
                     error: {
@@ -89,7 +89,7 @@ router.post(
             );
 
             // Add image ID to user's uploadedImageIds array
-            await UserService.addUploadedImageId(req.user.id, imageId);
+            await userService.addUploadedImageId(req.user.id, imageId);
 
             // Generate signed upload URL
             const { uploadUrl, downloadUrl } = await storageService.getSignedUploadUrl(fileName);
@@ -142,7 +142,7 @@ router.post(
             }
 
             // Check user's current photo count from user document
-            const user = await UserService.getUserById(req.user.id);
+            const user = await userService.getUserById(req.user.id);
             if (!user) {
                 res.status(404).json({
                     error: {
@@ -194,7 +194,7 @@ router.post(
             );
 
             // Add image ID to user's uploadedImageIds array
-            await UserService.addUploadedImageId(req.user.id, imageId);
+            await userService.addUploadedImageId(req.user.id, imageId);
 
             // Generate signed URL for the uploaded image
             const signedUrl = await storageService.getSignedUrl(fileName);
@@ -234,7 +234,7 @@ router.get(
             }
 
             // Get user data to access uploadedImageIds
-            const user = await UserService.getUserById(req.user.id);
+            const user = await userService.getUserById(req.user.id);
             if (!user) {
                 res.status(404).json({
                     error: {
@@ -307,7 +307,7 @@ router.delete(
             }
 
             // Get user to verify ownership
-            const user = await UserService.getUserById(req.user.id);
+            const user = await userService.getUserById(req.user.id);
             if (!user) {
                 res.status(404).json({
                     error: {
@@ -348,11 +348,11 @@ router.delete(
             await firestore.collection('image-data').doc(imageId).delete();
 
             // Remove image ID from user's uploadedImageIds array
-            await UserService.removeUploadedImageId(req.user.id, imageId);
+            await userService.removeUploadedImageId(req.user.id, imageId);
 
             // Also remove from poolImageIds if it was in the pool
             if (user.poolImageIds.includes(imageId)) {
-                await UserService.removePoolImageId(req.user.id, imageId);
+                await userService.removePoolImageId(req.user.id, imageId);
             }
 
             res.json({
@@ -391,7 +391,7 @@ router.post(
             }
 
             // Verify the user owns this image
-            const user = await UserService.getUserById(req.user.id);
+            const user = await userService.getUserById(req.user.id);
             if (!user || !user.uploadedImageIds.includes(imageId)) {
                 res.status(403).json({
                     error: {
@@ -418,7 +418,7 @@ router.post(
                     actualFileName = foundFile;
                 } else {
                     // Rollback: Remove from user's array and delete record
-                    await UserService.removeUploadedImageId(req.user.id, imageId);
+                    await userService.removeUploadedImageId(req.user.id, imageId);
                     await firestore.collection('image-data').doc(imageId).delete();
 
                     res.status(400).json({

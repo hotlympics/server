@@ -5,7 +5,26 @@ import { glicko2Service } from './glicko2-service.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
 
-export class ImageDataService {
+const convertDocToImageData = (doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData => {
+    const data = doc.data();
+    return {
+        imageId: data.imageId as string,
+        userId: data.userId as string,
+        imageUrl: data.imageUrl as string,
+        gender: data.gender as 'male' | 'female',
+        dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
+        battles: data.battles as number,
+        wins: data.wins as number,
+        losses: data.losses as number,
+        draws: data.draws as number,
+        glicko: data.glicko as GlickoState,
+        inPool: data.inPool as boolean,
+        status: data.status as 'pending' | 'active' | undefined,
+        randomSeed: data.randomSeed as number,
+    };
+};
+
+export const imageDataService = {
     async createImageData(
         imageId: string,
         userId: string,
@@ -42,52 +61,7 @@ export class ImageDataService {
 
         await firestore.collection(COLLECTION_NAME).doc(imageId).set(documentData);
         return stats;
-    }
-
-    async getImageData(imageId: string): Promise<ImageData | null> {
-        const doc = await firestore.collection(COLLECTION_NAME).doc(imageId).get();
-        if (!doc.exists) {
-            return null;
-        }
-
-        const data = doc.data();
-        if (!data) {
-            return null;
-        }
-
-        // Convert Firestore Timestamp to Date
-        return {
-            imageId: data.imageId as string,
-            userId: data.userId as string,
-            imageUrl: data.imageUrl as string,
-            gender: data.gender as 'male' | 'female',
-            dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-            battles: data.battles as number,
-            wins: data.wins as number,
-            losses: data.losses as number,
-            draws: data.draws as number,
-            glicko: data.glicko as GlickoState,
-            inPool: data.inPool as boolean,
-            randomSeed: data.randomSeed as number,
-        };
-    }
-
-    async updatePoolStatus(imageId: string, inPool: boolean): Promise<void> {
-        await firestore.collection(COLLECTION_NAME).doc(imageId).update({ inPool });
-    }
-
-    async batchUpdatePoolStatus(
-        updates: Array<{ imageId: string; inPool: boolean }>,
-    ): Promise<void> {
-        const batch = firestore.batch();
-
-        for (const { imageId, inPool } of updates) {
-            const docRef = firestore.collection(COLLECTION_NAME).doc(imageId);
-            batch.update(docRef, { inPool });
-        }
-
-        await batch.commit();
-    }
+    },
 
     async getRandomImages(
         count: number,
@@ -135,7 +109,7 @@ export class ImageDataService {
                 const snapshot = await query.orderBy('randomSeed').limit(1).get();
 
                 if (!snapshot.empty) {
-                    const candidate = this.convertDocToImageData(snapshot.docs[0]);
+                    const candidate = convertDocToImageData(snapshot.docs[0]);
 
                     // Double-check user uniqueness (in case we couldn't use not-in)
                     if (!usedUserIds.has(candidate.userId)) {
@@ -169,26 +143,7 @@ export class ImageDataService {
         );
 
         return selectedImages;
-    }
-
-    private convertDocToImageData(doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData {
-        const data = doc.data();
-        return {
-            imageId: data.imageId as string,
-            userId: data.userId as string,
-            imageUrl: data.imageUrl as string,
-            gender: data.gender as 'male' | 'female',
-            dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-            battles: data.battles as number,
-            wins: data.wins as number,
-            losses: data.losses as number,
-            draws: data.draws as number,
-            glicko: data.glicko as GlickoState,
-            inPool: data.inPool as boolean,
-            status: data.status as 'pending' | 'active' | undefined,
-            randomSeed: data.randomSeed as number,
-        };
-    }
+    },
 
     async updateImageStatus(
         imageId: string,
@@ -202,37 +157,85 @@ export class ImageDataService {
             updateData.uploadedAt = Timestamp.fromDate(updates.uploadedAt);
         }
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updateData);
-    }
+    },
 
-    async getPendingUploads(olderThanMinutes: number): Promise<ImageData[]> {
-        const cutoffTime = new Date();
-        cutoffTime.setMinutes(cutoffTime.getMinutes() - olderThanMinutes);
+    /**
+     * Transactionally update pool status for multiple images and user's poolImageIds array
+     * Used by admin during user creation and user pool selection updates
+     */
+    async updateUserPoolStatus(
+        userId: string,
+        poolImageIds: string[],
+        poolUpdates: Array<{ imageId: string; inPool: boolean }>,
+    ): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
 
-        const snapshot = await firestore
-            .collection(COLLECTION_NAME)
-            .where('status', '==', 'pending')
-            .where('createdAt', '<', Timestamp.fromDate(cutoffTime))
-            .get();
+            // Update user's pool selections
+            transaction.update(userRef, {
+                poolImageIds: poolImageIds,
+            });
 
-        return snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                imageId: data.imageId as string,
-                userId: data.userId as string,
-                imageUrl: data.imageUrl as string,
-                gender: data.gender as 'male' | 'female',
-                dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-                battles: data.battles as number,
-                wins: data.wins as number,
-                losses: data.losses as number,
-                draws: data.draws as number,
-                glicko: data.glicko as GlickoState, // All images now have glicko objects
-                inPool: data.inPool as boolean,
-                status: data.status as 'pending' | 'active',
-                randomSeed: data.randomSeed as number,
-            };
+            // Update each affected image's inPool status
+            poolUpdates.forEach(({ imageId, inPool }) => {
+                const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+                transaction.update(imageRef, { inPool });
+            });
+
+            return Promise.resolve();
         });
-    }
-}
+    },
 
-export const imageDataService = new ImageDataService();
+    /**
+     * Transactionally add images to user's pool during admin user creation
+     * Updates both user document and all image documents atomically
+     */
+    async addImagesToUserPool(userId: string, imageIds: string[]): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
+
+            // Update user document with pool image IDs
+            transaction.update(userRef, {
+                poolImageIds: imageIds,
+            });
+
+            // Update each image's inPool status
+            imageIds.forEach((imageId) => {
+                const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+                transaction.update(imageRef, {
+                    inPool: true,
+                });
+            });
+
+            return Promise.resolve();
+        });
+    },
+
+    /**
+     * Transactionally toggle a single image's pool status
+     * Updates both user's poolImageIds array and image's inPool field
+     */
+    async toggleImagePoolStatus(
+        userId: string,
+        imageId: string,
+        addToPool: boolean,
+        updatedPoolImageIds: string[],
+    ): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
+            const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+
+            // Update user document with new pool image IDs
+            transaction.update(userRef, {
+                poolImageIds: updatedPoolImageIds,
+            });
+
+            // Update the inPool field in the image-data document
+            transaction.update(imageRef, {
+                inPool: addToPool,
+            });
+
+            return Promise.resolve();
+        });
+    },
+};
