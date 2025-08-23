@@ -158,6 +158,86 @@ export class ImageDataService {
         }
         await firestore.collection(COLLECTION_NAME).doc(imageId).update(updateData);
     }
+
+    /**
+     * Transactionally update pool status for multiple images and user's poolImageIds array
+     * Used by admin during user creation and user pool selection updates
+     */
+    async updateUserPoolStatus(
+        userId: string,
+        poolImageIds: string[],
+        poolUpdates: Array<{ imageId: string; inPool: boolean }>,
+    ): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
+
+            // Update user's pool selections
+            transaction.update(userRef, {
+                poolImageIds: poolImageIds,
+            });
+
+            // Update each affected image's inPool status
+            poolUpdates.forEach(({ imageId, inPool }) => {
+                const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+                transaction.update(imageRef, { inPool });
+            });
+
+            return Promise.resolve();
+        });
+    }
+
+    /**
+     * Transactionally add images to user's pool during admin user creation
+     * Updates both user document and all image documents atomically
+     */
+    async addImagesToUserPool(userId: string, imageIds: string[]): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
+
+            // Update user document with pool image IDs
+            transaction.update(userRef, {
+                poolImageIds: imageIds,
+            });
+
+            // Update each image's inPool status
+            imageIds.forEach((imageId) => {
+                const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+                transaction.update(imageRef, {
+                    inPool: true,
+                });
+            });
+
+            return Promise.resolve();
+        });
+    }
+
+    /**
+     * Transactionally toggle a single image's pool status
+     * Updates both user's poolImageIds array and image's inPool field
+     */
+    async toggleImagePoolStatus(
+        userId: string,
+        imageId: string,
+        addToPool: boolean,
+        updatedPoolImageIds: string[],
+    ): Promise<void> {
+        await firestore.runTransaction(async (transaction) => {
+            const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
+            const imageRef = firestore.collection(COLLECTION_NAME).doc(imageId);
+
+            // Update user document with new pool image IDs
+            transaction.update(userRef, {
+                poolImageIds: updatedPoolImageIds,
+            });
+
+            // Update the inPool field in the image-data document
+            transaction.update(imageRef, {
+                inPool: addToPool,
+            });
+
+            return Promise.resolve();
+        });
+    }
 }
 
 export const imageDataService = new ImageDataService();

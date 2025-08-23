@@ -357,26 +357,8 @@ router.post(
                         }
 
                         if (poolImageIdsToAdd.length > 0) {
-                            // Use transaction to ensure user document and image documents stay in sync
-                            await firestore.runTransaction(async (transaction) => {
-                                const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
-
-                                // Update user document with pool image IDs
-                                transaction.update(userRef, {
-                                    poolImageIds: poolImageIdsToAdd,
-                                });
-
-                                // Update the inPool field in each image-data document
-                                poolImageIdsToAdd.forEach((imageId) => {
-                                    const imageRef = firestore
-                                        .collection(COLLECTIONS.IMAGE_DATA)
-                                        .doc(imageId);
-                                    transaction.update(imageRef, {
-                                        inPool: true,
-                                    });
-                                });
-                                return Promise.resolve();
-                            });
+                            // Use image data service for transactional pool updates
+                            await imageDataService.addImagesToUserPool(userId, poolImageIdsToAdd);
 
                             console.log(
                                 `Added ${poolImageIdsToAdd.length} images to pool for user ${userId}`,
@@ -680,22 +662,13 @@ router.put(
                     console.log(`Removing image ${imageId} from pool for user ${userId}`);
                 }
 
-                // Use transaction to ensure user document and image document stay in sync
-                await firestore.runTransaction(async (transaction) => {
-                    const userRef = firestore.collection(COLLECTIONS.USERS).doc(userId);
-                    const imageRef = firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId);
-
-                    // Update user document with new pool image IDs
-                    transaction.update(userRef, {
-                        poolImageIds: updatedPoolImageIds,
-                    });
-
-                    // Update the inPool field in the image-data document
-                    transaction.update(imageRef, {
-                        inPool: addToPool,
-                    });
-                    return Promise.resolve();
-                });
+                // Use image data service for transactional pool toggle
+                await imageDataService.toggleImagePoolStatus(
+                    userId,
+                    imageId,
+                    addToPool,
+                    updatedPoolImageIds,
+                );
 
                 res.json({
                     message: addToPool
