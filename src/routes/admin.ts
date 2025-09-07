@@ -170,12 +170,21 @@ router.post('/login', (req, res: Response): void => {
     }
 });
 
-// Get all users
+// Get users with pagination
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.get('/users', adminAuthMiddleware, (_req: AdminRequest, res: Response): void => {
+router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const snapshot = await firestore.collection(COLLECTIONS.USERS).get();
+            const limit = parseInt(req.query.limit as string) || 10;
+            const startAfter = req.query.startAfter as string;
+
+            let query = firestore.collection(COLLECTIONS.USERS).orderBy('__name__').limit(limit);
+
+            if (startAfter) {
+                query = query.startAfter(startAfter);
+            }
+
+            const snapshot = await query.get();
             const users = snapshot.docs.map((doc) => {
                 const data = doc.data() as UserDocument;
                 return {
@@ -184,7 +193,17 @@ router.get('/users', adminAuthMiddleware, (_req: AdminRequest, res: Response): v
                     dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate().toISOString() : null,
                 };
             });
-            res.json({ users });
+
+            // Get the last document ID for next page cursor
+            const lastDocId =
+                snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+            const hasMore = snapshot.docs.length === limit;
+
+            res.json({
+                users,
+                nextCursor: hasMore ? lastDocId : null,
+                hasMore,
+            });
         } catch (error) {
             console.error('Get users error:', error);
             res.status(500).json({ error: { message: 'Failed to fetch users' } });
