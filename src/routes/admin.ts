@@ -170,28 +170,144 @@ router.post('/login', (req, res: Response): void => {
     }
 });
 
-// Get all users
+// Get users with pagination and search
 // eslint-disable-next-line @typescript-eslint/no-misused-promises
-router.get('/users', adminAuthMiddleware, (_req: AdminRequest, res: Response): void => {
+router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const snapshot = await firestore.collection(COLLECTIONS.USERS).get();
-            const users = snapshot.docs.map((doc) => {
-                const data = doc.data() as UserDocument;
-                return {
-                    id: doc.id,
-                    ...data,
-                    dateOfBirth: data.dateOfBirth ? data.dateOfBirth.toDate().toISOString() : null,
-                };
+            const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+            const startAfter = req.query.startAfter as string;
+            const endBefore = req.query.endBefore as string;
+            const searchEmail = req.query.searchEmail as string;
+
+            interface FormattedUser {
+                id: string;
+                firebaseUid: string;
+                email: string;
+                googleId: string | null;
+                gender: 'unknown' | 'male' | 'female';
+                dateOfBirth: string | null;
+                rateCount: number;
+                uploadedImageIds: string[];
+                poolImageIds: string[];
+                displayName?: string | null;
+                photoUrl?: string | null;
+            }
+
+            let users: FormattedUser[] = [];
+            let hasMoreForward = false;
+            let nextCursor: string | null = null;
+            let prevCursor: string | null = null;
+            let hasPrevious = false;
+
+            if (searchEmail && searchEmail.trim()) {
+                // Search mode: find users by email (case-insensitive partial match)
+                const searchTerm = searchEmail.toLowerCase().trim();
+
+                // Get all users and filter by email (for simplicity - in production, consider using full-text search)
+                const allUsersSnapshot = await firestore.collection(COLLECTIONS.USERS).get();
+                const filteredUsers = allUsersSnapshot.docs
+                    .map((doc) => {
+                        const data = doc.data() as UserDocument;
+                        return {
+                            id: doc.id,
+                            ...data,
+                            dateOfBirth: data.dateOfBirth
+                                ? data.dateOfBirth.toDate().toISOString()
+                                : null,
+                        };
+                    })
+                    .filter((user) => user.email.toLowerCase().includes(searchTerm))
+                    .sort((a, b) => a.email.localeCompare(b.email));
+
+                // Apply pagination to filtered results
+                const totalResults = filteredUsers.length;
+                const startIndex = startAfter
+                    ? filteredUsers.findIndex((u) => u.id === startAfter) + 1
+                    : endBefore
+                      ? Math.max(0, filteredUsers.findIndex((u) => u.id === endBefore) - limit)
+                      : 0;
+
+                const endIndex = Math.min(startIndex + limit, totalResults);
+                users = filteredUsers.slice(startIndex, endIndex);
+
+                // Calculate pagination state
+                hasMoreForward = endIndex < totalResults;
+                hasPrevious = startIndex > 0;
+
+                if (users.length > 0) {
+                    nextCursor = hasMoreForward ? users[users.length - 1].id : null;
+                    prevCursor = users[0].id;
+                }
+            } else {
+                // Normal pagination mode (no search)
+                let query = firestore.collection(COLLECTIONS.USERS).orderBy('__name__', 'asc');
+
+                if (startAfter) {
+                    query = query.startAfter(startAfter);
+                } else if (endBefore) {
+                    query = query.endBefore(endBefore).limitToLast(limit);
+                }
+
+                if (!endBefore) {
+                    query = query.limit(limit);
+                }
+
+                const snapshot = await query.get();
+                users = snapshot.docs.map((doc) => {
+                    const data = doc.data() as UserDocument;
+                    return {
+                        id: doc.id,
+                        ...data,
+                        dateOfBirth: data.dateOfBirth
+                            ? data.dateOfBirth.toDate().toISOString()
+                            : null,
+                    };
+                });
+
+                if (users.length > 0) {
+                    const testForwardQuery = firestore
+                        .collection(COLLECTIONS.USERS)
+                        .orderBy('__name__', 'asc')
+                        .startAfter(users[users.length - 1].id)
+                        .limit(1);
+                    const testForwardSnapshot = await testForwardQuery.get();
+                    hasMoreForward = !testForwardSnapshot.empty;
+                }
+
+                if (users.length > 0) {
+                    nextCursor = hasMoreForward ? users[users.length - 1].id : null;
+                    prevCursor = users[0].id;
+
+                    if (startAfter) {
+                        hasPrevious = true;
+                    } else if (endBefore) {
+                        const testQuery = firestore
+                            .collection(COLLECTIONS.USERS)
+                            .orderBy('__name__', 'asc')
+                            .endBefore(users[0].id)
+                            .limit(1);
+                        const testSnapshot = await testQuery.get();
+                        hasPrevious = !testSnapshot.empty;
+                    } else {
+                        hasPrevious = false;
+                    }
+                }
+            }
+
+            res.json({
+                users,
+                nextCursor,
+                prevCursor,
+                hasMore: hasMoreForward,
+                hasPrevious,
+                searchEmail: searchEmail || null,
             });
-            res.json({ users });
         } catch (error) {
             console.error('Get users error:', error);
             res.status(500).json({ error: { message: 'Failed to fetch users' } });
         }
-    })().catch(() => {
-        // Error already handled in try-catch
-    });
+    })().catch(() => {});
 });
 
 // Create new user
