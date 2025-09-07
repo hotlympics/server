@@ -179,22 +179,24 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
             const startAfter = req.query.startAfter as string;
             const endBefore = req.query.endBefore as string;
 
-            // For pagination, we always order ascending by document ID
-            // and use startAfter/endBefore to control direction
-            let query = firestore
-                .collection(COLLECTIONS.USERS)
-                .orderBy('__name__', 'asc');
+            let query = firestore.collection(COLLECTIONS.USERS).orderBy('__name__', 'asc');
 
             if (startAfter) {
+                // Going forward: get documents after this cursor
                 query = query.startAfter(startAfter);
             } else if (endBefore) {
-                query = query.endBefore(endBefore);
+                // Going backward: get documents before this cursor, but use limit+offset approach
+                // This is tricky with Firestore - we need to get the previous page exactly
+                // For now, let's get documents before and take the last `limit` ones
+                query = query.endBefore(endBefore).limitToLast(limit);
             }
 
-            query = query.limit(limit);
+            if (!endBefore) {
+                query = query.limit(limit);
+            }
 
             const snapshot = await query.get();
-            const users = snapshot.docs.map((doc) => {
+            let users = snapshot.docs.map((doc) => {
                 const data = doc.data() as UserDocument;
                 return {
                     id: doc.id,
@@ -203,22 +205,54 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
                 };
             });
 
-            // For backward pagination (endBefore), reverse the results
-            if (endBefore) {
-                users.reverse();
+            // Check if there are more documents forward from the last user in current page
+            let hasMoreForward = false;
+            if (users.length > 0) {
+                const testForwardQuery = firestore
+                    .collection(COLLECTIONS.USERS)
+                    .orderBy('__name__', 'asc')
+                    .startAfter(users[users.length - 1].id)
+                    .limit(1);
+                const testForwardSnapshot = await testForwardQuery.get();
+                hasMoreForward = !testForwardSnapshot.empty;
             }
+            
+            // Calculate cursors based on the final user array order
+            let nextCursor: string | null = null;
+            let prevCursor: string | null = null;
+            let hasPrevious = false;
 
-            // Get cursor information based on the original document order (before any reversal)
-            const docs = endBefore ? [...snapshot.docs].reverse() : snapshot.docs;
-            const firstDocId = docs.length > 0 ? docs[0].id : null;
-            const lastDocId = docs.length > 0 ? docs[docs.length - 1].id : null;
-            const hasMore = snapshot.docs.length === limit;
+            if (users.length > 0) {
+                // nextCursor: only set if there are more documents forward
+                nextCursor = hasMoreForward ? users[users.length - 1].id : null;
+                
+                // prevCursor: always the first user ID (for going backward) 
+                prevCursor = users[0].id;
+                
+                if (startAfter) {
+                    // We went forward, so there are definitely previous pages
+                    hasPrevious = true;
+                } else if (endBefore) {
+                    // We went backward, check if there are more pages before
+                    const testQuery = firestore
+                        .collection(COLLECTIONS.USERS)
+                        .orderBy('__name__', 'asc')
+                        .endBefore(users[0].id)
+                        .limit(1);
+                    const testSnapshot = await testQuery.get();
+                    hasPrevious = !testSnapshot.empty;
+                } else {
+                    // First page load, no previous pages
+                    hasPrevious = false;
+                }
+            }
 
             res.json({
                 users,
-                nextCursor: hasMore ? lastDocId : null,
-                prevCursor: firstDocId,
-                hasMore,
+                nextCursor,
+                prevCursor,
+                hasMore: hasMoreForward,
+                hasPrevious,
             });
         } catch (error) {
             console.error('Get users error:', error);
