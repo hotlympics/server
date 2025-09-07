@@ -77,6 +77,13 @@
         { "fieldPath": "gender", "order": "ASCENDING" },
         { "fieldPath": "glicko.rating", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

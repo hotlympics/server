@@ -175,14 +175,23 @@ router.post('/login', (req, res: Response): void => {
 router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const limit = parseInt(req.query.limit as string) || 10;
+            const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
             const startAfter = req.query.startAfter as string;
+            const endBefore = req.query.endBefore as string;
 
-            let query = firestore.collection(COLLECTIONS.USERS).orderBy('__name__').limit(limit);
+            // For pagination, we always order ascending by document ID
+            // and use startAfter/endBefore to control direction
+            let query = firestore
+                .collection(COLLECTIONS.USERS)
+                .orderBy('__name__', 'asc');
 
             if (startAfter) {
                 query = query.startAfter(startAfter);
+            } else if (endBefore) {
+                query = query.endBefore(endBefore);
             }
+
+            query = query.limit(limit);
 
             const snapshot = await query.get();
             const users = snapshot.docs.map((doc) => {
@@ -194,14 +203,21 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
                 };
             });
 
-            // Get the last document ID for next page cursor
-            const lastDocId =
-                snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
+            // For backward pagination (endBefore), reverse the results
+            if (endBefore) {
+                users.reverse();
+            }
+
+            // Get cursor information based on the original document order (before any reversal)
+            const docs = endBefore ? [...snapshot.docs].reverse() : snapshot.docs;
+            const firstDocId = docs.length > 0 ? docs[0].id : null;
+            const lastDocId = docs.length > 0 ? docs[docs.length - 1].id : null;
             const hasMore = snapshot.docs.length === limit;
 
             res.json({
                 users,
                 nextCursor: hasMore ? lastDocId : null,
+                prevCursor: firstDocId,
                 hasMore,
             });
         } catch (error) {
