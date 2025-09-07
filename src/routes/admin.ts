@@ -182,12 +182,8 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
             let query = firestore.collection(COLLECTIONS.USERS).orderBy('__name__', 'asc');
 
             if (startAfter) {
-                // Going forward: get documents after this cursor
                 query = query.startAfter(startAfter);
             } else if (endBefore) {
-                // Going backward: get documents before this cursor, but use limit+offset approach
-                // This is tricky with Firestore - we need to get the previous page exactly
-                // For now, let's get documents before and take the last `limit` ones
                 query = query.endBefore(endBefore).limitToLast(limit);
             }
 
@@ -205,7 +201,6 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
                 };
             });
 
-            // Check if there are more documents forward from the last user in current page
             let hasMoreForward = false;
             if (users.length > 0) {
                 const testForwardQuery = firestore
@@ -216,24 +211,18 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
                 const testForwardSnapshot = await testForwardQuery.get();
                 hasMoreForward = !testForwardSnapshot.empty;
             }
-            
-            // Calculate cursors based on the final user array order
+
             let nextCursor: string | null = null;
             let prevCursor: string | null = null;
             let hasPrevious = false;
 
             if (users.length > 0) {
-                // nextCursor: only set if there are more documents forward
                 nextCursor = hasMoreForward ? users[users.length - 1].id : null;
-                
-                // prevCursor: always the first user ID (for going backward) 
                 prevCursor = users[0].id;
-                
+
                 if (startAfter) {
-                    // We went forward, so there are definitely previous pages
                     hasPrevious = true;
                 } else if (endBefore) {
-                    // We went backward, check if there are more pages before
                     const testQuery = firestore
                         .collection(COLLECTIONS.USERS)
                         .orderBy('__name__', 'asc')
@@ -242,7 +231,6 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
                     const testSnapshot = await testQuery.get();
                     hasPrevious = !testSnapshot.empty;
                 } else {
-                    // First page load, no previous pages
                     hasPrevious = false;
                 }
             }
@@ -259,7 +247,6 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
             res.status(500).json({ error: { message: 'Failed to fetch users' } });
         }
     })().catch(() => {
-        // Error already handled in try-catch
     });
 });
 
