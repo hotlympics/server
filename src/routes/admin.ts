@@ -192,7 +192,7 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
             }
 
             const snapshot = await query.get();
-            let users = snapshot.docs.map((doc) => {
+            const users = snapshot.docs.map((doc) => {
                 const data = doc.data() as UserDocument;
                 return {
                     id: doc.id,
@@ -246,8 +246,7 @@ router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): vo
             console.error('Get users error:', error);
             res.status(500).json({ error: { message: 'Failed to fetch users' } });
         }
-    })().catch(() => {
-    });
+    })().catch(() => {});
 });
 
 // Create new user
