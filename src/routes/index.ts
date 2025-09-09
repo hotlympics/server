@@ -5,6 +5,7 @@ import imagesRouter from './images.js';
 import userRouter from './user.js';
 import ratingsRouter from './ratings.js';
 import adminRouter from './admin.js';
+import reportsRouter from './reports.js';
 import { leaderboardsRouter } from './leaderboards.js';
 
 const router = Router();
@@ -14,6 +15,7 @@ router.use('/auth', firebaseAuthRouter);
 router.use('/images', imagesRouter);
 router.use('/user', userRouter);
 router.use('/ratings', ratingsRouter);
+router.use('/reports', reportsRouter);
 router.use('/admin', adminRouter);
 router.use('/leaderboards', leaderboardsRouter);
 
