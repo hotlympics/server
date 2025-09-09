@@ -7,6 +7,7 @@ import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { storageService } from '../services/storage-service.js';
+import { reportService } from '../services/report-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import {
     adminAuthMiddleware,
@@ -16,6 +17,7 @@ import {
 import { Timestamp } from '@google-cloud/firestore';
 import { GlickoState } from '../models/image-data.js';
 import { BattleHistory } from '../models/battle-history.js';
+import type { ReportStatus } from '../models/report.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -889,6 +891,128 @@ router.get(
             } catch (error) {
                 console.error('Get image URL error:', error);
                 res.status(500).json({ error: { message: 'Failed to get image URL' } });
+            }
+        })().catch(() => {
+            // Error already handled in try-catch
+        });
+    },
+);
+
+// Get reports for admin review
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
+    (async () => {
+        try {
+            const {
+                status,
+                limit = '50',
+                offset = '0',
+            } = req.query as {
+                status?: ReportStatus;
+                limit?: string;
+                offset?: string;
+            };
+
+            const searchLimit = Math.min(parseInt(limit, 10) || 50, 100);
+            const searchOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
+            const reports = await reportService.getReports(status, searchLimit, searchOffset);
+
+            res.json({
+                reports,
+                totalCount: reports.length,
+                limit: searchLimit,
+                offset: searchOffset,
+                status: status || null,
+            });
+        } catch (error) {
+            console.error('Get reports error:', error);
+            res.status(500).json({ error: { message: 'Failed to fetch reports' } });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Update report status
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.put('/reports/:reportId', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
+    (async () => {
+        try {
+            const { reportId } = req.params;
+            const { status, adminNotes } = req.body as {
+                status: ReportStatus;
+                adminNotes?: string;
+            };
+
+            if (!status) {
+                res.status(400).json({
+                    error: { message: 'status is required' },
+                });
+                return;
+            }
+
+            // Validate status
+            const validStatuses: ReportStatus[] = [
+                'PENDING',
+                'UNDER_REVIEW',
+                'APPROVED',
+                'REJECTED',
+                'DUPLICATE',
+            ];
+            if (!validStatuses.includes(status)) {
+                res.status(400).json({
+                    error: { message: 'Invalid report status' },
+                });
+                return;
+            }
+
+            // For this basic implementation, we'll use 'admin' as the admin user ID
+            // In a real implementation, you'd extract this from the admin authentication
+            const adminUserId = 'admin';
+
+            await reportService.updateReportStatus(reportId, status, adminUserId, adminNotes);
+
+            res.json({
+                message: 'Report status updated successfully',
+                reportId,
+                status,
+            });
+        } catch (error) {
+            console.error('Update report status error:', error);
+
+            if (error instanceof Error && error.message === 'Report not found') {
+                res.status(404).json({ error: { message: error.message } });
+                return;
+            }
+
+            res.status(500).json({ error: { message: 'Failed to update report status' } });
+        }
+    })().catch(() => {
+        // Error already handled in try-catch
+    });
+});
+
+// Get reports for a specific image
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get(
+    '/images/:imageId/reports',
+    adminAuthMiddleware,
+    (req: AdminRequest, res: Response): void => {
+        (async () => {
+            try {
+                const { imageId } = req.params;
+
+                const reports = await reportService.getReportsForImage(imageId);
+
+                res.json({
+                    reports,
+                    imageId,
+                    totalCount: reports.length,
+                });
+            } catch (error) {
+                console.error('Get image reports error:', error);
+                res.status(500).json({ error: { message: 'Failed to fetch image reports' } });
             }
         })().catch(() => {
             // Error already handled in try-catch

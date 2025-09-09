@@ -8,6 +8,9 @@ export const firestore = new Firestore({
     databaseId: process.env.FIRESTORE_DATABASE_ID,
 });
 
+// Export db alias for compatibility
+export const db = firestore;
+
 // Collection names
 export const COLLECTIONS = {
     USERS: 'users',
@@ -15,4 +18,5 @@ export const COLLECTIONS = {
     BATTLES: 'battles',
     LEADERBOARDS: 'leaderboards',
     LEADERBOARDS_META: 'leaderboards_meta',
+    REPORTS: 'reports',
 } as const;

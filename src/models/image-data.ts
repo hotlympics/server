@@ -24,4 +24,5 @@ export interface ImageData {
     inPool: boolean; // Whether the image is in the pool for battles
     status?: 'pending' | 'active'; // Upload status
     randomSeed: number; // Random value (0-1) for efficient random selection
+    reportCount?: number; // Track total reports (+1 for each report)
 }
