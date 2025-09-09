@@ -4,6 +4,20 @@ import { logger } from '../utils/logger.js';
 import type { Report, ReportCategory, ReportStatus } from '../models/report.js';
 import type { ImageData } from '../models/image-data.js';
 
+// API response type with string dates
+export interface ReportResponse {
+    reportID: string;
+    imageId: string;
+    userId: string;
+    category: ReportCategory;
+    description?: string;
+    status: ReportStatus;
+    createdAt: string; // ISO string
+    reviewedAt?: string; // ISO string
+    reviewedBy?: string;
+    adminNotes?: string;
+}
+
 export class ReportService {
     private readonly reportsCollection = db.collection(COLLECTIONS.REPORTS);
     private readonly imagesCollection = db.collection(COLLECTIONS.IMAGE_DATA);
@@ -89,22 +103,96 @@ export class ReportService {
     }
 
     /**
-     * Get reports for admin review
+     * Get reports for admin review with cursor-based pagination
      */
     async getReports(
         status?: ReportStatus,
-        limit: number = 50,
-        offset: number = 0,
-    ): Promise<Report[]> {
+        limit: number = 10,
+        startAfter?: string,
+        endBefore?: string,
+    ): Promise<{
+        reports: ReportResponse[];
+        nextCursor: string | null;
+        prevCursor: string | null;
+        hasMore: boolean;
+        hasPrevious: boolean;
+    }> {
+        const safeLimit = Math.min(limit, 50); // Cap at 50 items per page
+
         let query = this.reportsCollection.orderBy('createdAt', 'desc');
 
         if (status) {
             query = query.where('status', '==', status);
         }
 
-        const snapshot = await query.offset(offset).limit(limit).get();
+        // Apply cursor pagination
+        if (startAfter) {
+            query = query.startAfter(startAfter);
+        } else if (endBefore) {
+            query = query.endBefore(endBefore).limitToLast(safeLimit);
+        }
 
-        return snapshot.docs.map((doc) => doc.data() as Report);
+        if (!endBefore) {
+            query = query.limit(safeLimit);
+        }
+
+        const snapshot = await query.get();
+
+        const reports = snapshot.docs.map((doc) => {
+            const data = doc.data() as Report;
+            return {
+                ...data,
+                createdAt: data.createdAt.toDate().toISOString(),
+                reviewedAt: data.reviewedAt ? data.reviewedAt.toDate().toISOString() : undefined,
+            };
+        });
+
+        let hasMoreForward = false;
+        let hasPrevious = false;
+        let nextCursor: string | null = null;
+        let prevCursor: string | null = null;
+
+        if (reports.length > 0) {
+            // Test for more results forward
+            let testForwardQuery = this.reportsCollection.orderBy('createdAt', 'desc');
+            if (status) {
+                testForwardQuery = testForwardQuery.where('status', '==', status);
+            }
+            testForwardQuery = testForwardQuery
+                .startAfter(snapshot.docs[snapshot.docs.length - 1])
+                .limit(1);
+
+            const testForwardSnapshot = await testForwardQuery.get();
+            hasMoreForward = !testForwardSnapshot.empty;
+
+            // Set cursors
+            nextCursor = hasMoreForward ? reports[reports.length - 1].reportID : null;
+            prevCursor = reports[0].reportID;
+
+            // Test for previous results
+            if (startAfter) {
+                hasPrevious = true;
+            } else if (endBefore) {
+                let testBackwardQuery = this.reportsCollection.orderBy('createdAt', 'desc');
+                if (status) {
+                    testBackwardQuery = testBackwardQuery.where('status', '==', status);
+                }
+                testBackwardQuery = testBackwardQuery.endBefore(snapshot.docs[0]).limit(1);
+
+                const testBackwardSnapshot = await testBackwardQuery.get();
+                hasPrevious = !testBackwardSnapshot.empty;
+            } else {
+                hasPrevious = false;
+            }
+        }
+
+        return {
+            reports,
+            nextCursor,
+            prevCursor,
+            hasMore: hasMoreForward,
+            hasPrevious,
+        };
     }
 
     /**
@@ -128,38 +216,149 @@ export class ReportService {
             throw new Error('Report not found');
         }
 
-        const updateData: Partial<Report> = {
-            status,
-            reviewedAt: Timestamp.now(),
-            reviewedBy: adminUserId,
-        };
+        const report = reportDoc.data() as Report;
 
-        if (adminNotes?.trim()) {
-            updateData.adminNotes = adminNotes.trim();
+        // Use a transaction to safely update all reports for the same imageId
+        await db.runTransaction(async (transaction) => {
+            // Re-read the specific report within transaction to ensure it hasn't changed
+            const currentReportDoc = await transaction.get(reportRef);
+            if (!currentReportDoc.exists) {
+                throw new Error('Report not found in transaction');
+            }
+
+            // Get all reports for this imageId within the transaction
+            const reportsQuery = this.reportsCollection.where('imageId', '==', report.imageId);
+            const reportsSnapshot = await transaction.get(reportsQuery);
+
+            if (reportsSnapshot.docs.length > 500) {
+                throw new Error(
+                    `Too many reports for imageId ${report.imageId} (${reportsSnapshot.docs.length}). Transaction limit is 500.`,
+                );
+            }
+
+            const updateData: Partial<Report> = {
+                status,
+                reviewedAt: Timestamp.now(),
+                reviewedBy: adminUserId,
+            };
+
+            if (adminNotes?.trim()) {
+                updateData.adminNotes = adminNotes.trim();
+            }
+
+            // Update all reports for this imageId atomically
+            reportsSnapshot.docs.forEach((doc) => {
+                transaction.update(doc.ref, updateData);
+            });
+
+            logger.info(
+                `Scheduled update of ${reportsSnapshot.docs.length} reports for imageId ${report.imageId} to status ${status}`,
+            );
+        });
+
+        // If approving the report, handle image deletion AFTER successful transaction
+        if (status === 'APPROVED') {
+            await this.handleApprovedReport(report);
         }
 
-        await reportRef.update(updateData);
-        logger.info(`Report ${reportId} status updated successfully`);
+        logger.info(
+            `Successfully updated all reports for image ${report.imageId} to status ${status}`,
+        );
+    }
+
+    /**
+     * Handle actions when a report is approved
+     */
+    private async handleApprovedReport(report: Report): Promise<void> {
+        const imageId = report.imageId;
+        logger.info(
+            `Taking action on approved report for image ${imageId} - deleting image completely`,
+        );
+
+        try {
+            // 1. Get image data first to find the userId and imageUrl (same approach as users tab)
+            const imageDoc = await this.imagesCollection.doc(imageId).get();
+
+            if (!imageDoc.exists) {
+                logger.warn(`Image ${imageId} not found when processing approved report`);
+                return;
+            }
+
+            const imageData = imageDoc.data() as ImageData;
+            const userId = imageData.userId;
+            const imageUrl = imageData.imageUrl;
+
+            // 2. Delete image from Google Cloud Storage
+            try {
+                const { storageService } = await import('./storage-service.js');
+                await storageService.deleteImage(imageUrl);
+                logger.info(`Deleted image from storage: ${imageUrl}`);
+            } catch (storageError) {
+                logger.warn(`Failed to delete image ${imageUrl}:`, storageError);
+                // Continue with deletion even if storage deletion fails
+            }
+
+            // 3. Delete image-data document from Firestore
+            await this.imagesCollection.doc(imageId).delete();
+            logger.info(`Deleted image-data document: ${imageId}`);
+
+            // 4. Remove imageId from user's uploadedImageIds and poolImageIds arrays
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                const updatedUploadedImageIds = (
+                    (userData?.uploadedImageIds as string[]) || []
+                ).filter((id: string) => id !== imageId);
+                const updatedPoolImageIds = ((userData?.poolImageIds as string[]) || []).filter(
+                    (id: string) => id !== imageId,
+                );
+
+                await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                    uploadedImageIds: updatedUploadedImageIds,
+                    poolImageIds: updatedPoolImageIds,
+                });
+                logger.info(`Removed image ${imageId} from user ${userId} arrays`);
+            }
+
+            logger.info(`Successfully deleted image ${imageId} completely due to approved report`);
+        } catch (error) {
+            logger.error(`Failed to handle approved report for image ${imageId}:`, error);
+            // Don't throw - we still want the report status to update even if image action fails
+        }
     }
 
     /**
      * Get reports for a specific image
      */
-    async getReportsForImage(imageId: string): Promise<Report[]> {
+    async getReportsForImage(imageId: string): Promise<ReportResponse[]> {
         const snapshot = await this.reportsCollection
             .where('imageId', '==', imageId)
             .orderBy('createdAt', 'desc')
             .get();
 
-        return snapshot.docs.map((doc) => doc.data() as Report);
+        return snapshot.docs.map((doc) => {
+            const data = doc.data() as Report;
+            return {
+                ...data,
+                createdAt: data.createdAt.toDate().toISOString(),
+                reviewedAt: data.reviewedAt ? data.reviewedAt.toDate().toISOString() : undefined,
+            };
+        });
     }
 
     /**
      * Get report by ID
      */
-    async getReportById(reportId: string): Promise<Report | null> {
+    async getReportById(reportId: string): Promise<ReportResponse | null> {
         const doc = await this.reportsCollection.doc(reportId).get();
-        return doc.exists ? (doc.data() as Report) : null;
+        if (!doc.exists) return null;
+
+        const data = doc.data() as Report;
+        return {
+            ...data,
+            createdAt: data.createdAt.toDate().toISOString(),
+            reviewedAt: data.reviewedAt ? data.reviewedAt.toDate().toISOString() : undefined,
+        };
     }
 }
 

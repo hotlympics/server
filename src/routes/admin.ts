@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+import { Timestamp } from '@google-cloud/firestore';
 import { auth } from '../config/firebase-admin.js';
 import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
@@ -14,7 +15,6 @@ import {
     adminCredentials,
     type AdminRequest,
 } from '../middleware/admin-auth-middleware.js';
-import { Timestamp } from '@google-cloud/firestore';
 import { GlickoState } from '../models/image-data.js';
 import { BattleHistory } from '../models/battle-history.js';
 import type { ReportStatus } from '../models/report.js';
@@ -30,6 +30,20 @@ interface UserDocument {
     poolImageIds: string[];
     displayName?: string | null;
     photoUrl?: string | null;
+}
+
+interface ReportResponse {
+    reportID: string;
+    imageId: string;
+    userId: string;
+    category: string;
+    description?: string;
+    status: ReportStatus;
+    createdAt: string; // ISO string for API response
+    reviewedAt?: string; // ISO string for API response
+    reviewedBy?: string;
+    adminNotes?: string;
+    imageOwnerEmail?: string;
 }
 
 interface EnhancedBattle {
@@ -905,24 +919,35 @@ router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): 
         try {
             const {
                 status,
-                limit = '50',
-                offset = '0',
+                limit = '20',
+                startAfter,
+                endBefore,
             } = req.query as {
                 status?: ReportStatus;
                 limit?: string;
-                offset?: string;
+                startAfter?: string;
+                endBefore?: string;
             };
 
-            const searchLimit = Math.min(parseInt(limit, 10) || 50, 100);
-            const searchOffset = Math.max(parseInt(offset, 10) || 0, 0);
+            const searchLimit = Math.min(parseInt(limit, 10) || 20, 50);
 
-            const reports = await reportService.getReports(status, searchLimit, searchOffset);
+            const result = await reportService.getReports(
+                status,
+                searchLimit,
+                startAfter,
+                endBefore,
+            );
+
+            // Enhance reports with image owner emails
+            const enhancedReports = await enhanceReportsWithImageOwnerEmails(result.reports);
 
             res.json({
-                reports,
-                totalCount: reports.length,
+                reports: enhancedReports,
+                nextCursor: result.nextCursor,
+                prevCursor: result.prevCursor,
+                hasMore: result.hasMore,
+                hasPrevious: result.hasPrevious,
                 limit: searchLimit,
-                offset: searchOffset,
                 status: status || null,
             });
         } catch (error) {
@@ -1013,6 +1038,218 @@ router.get(
             } catch (error) {
                 console.error('Get image reports error:', error);
                 res.status(500).json({ error: { message: 'Failed to fetch image reports' } });
+            }
+        })().catch(() => {
+            // Error already handled in try-catch
+        });
+    },
+);
+
+// Utility function to enhance reports with image owner emails
+const enhanceReportsWithImageOwnerEmails = async (
+    reports: ReportResponse[],
+): Promise<ReportResponse[]> => {
+    if (reports.length === 0) return [];
+
+    // Extract unique image IDs
+    const imageIds = new Set<string>();
+    reports.forEach((report) => {
+        imageIds.add(report.imageId);
+    });
+
+    const uniqueImageIds = Array.from(imageIds);
+    const imageOwnerMap = new Map<string, string>();
+
+    // Batch fetch image data in chunks of 10 (Firestore 'in' operator limit)
+    const chunkSize = 10;
+    for (let i = 0; i < uniqueImageIds.length; i += chunkSize) {
+        const chunk = uniqueImageIds.slice(i, i + chunkSize);
+
+        try {
+            const imageQuery = await firestore
+                .collection(COLLECTIONS.IMAGE_DATA)
+                .where('imageId', 'in', chunk)
+                .get();
+
+            // Extract user IDs from image data
+            const userIds = new Set<string>();
+            const imageToUserMap = new Map<string, string>();
+
+            imageQuery.docs.forEach((doc) => {
+                const imageData = doc.data() as ImageDataDocument;
+                userIds.add(imageData.userId);
+                imageToUserMap.set(imageData.imageId, imageData.userId);
+            });
+
+            // Fetch user emails for these user IDs
+            const uniqueUserIds = Array.from(userIds);
+            const userEmailMap = new Map<string, string>();
+
+            // Batch fetch users in chunks of 10
+            for (let j = 0; j < uniqueUserIds.length; j += chunkSize) {
+                const userChunk = uniqueUserIds.slice(j, j + chunkSize);
+
+                try {
+                    const userQuery = await firestore
+                        .collection(COLLECTIONS.USERS)
+                        .where(
+                            '__name__',
+                            'in',
+                            userChunk.map((id) => firestore.collection(COLLECTIONS.USERS).doc(id)),
+                        )
+                        .get();
+
+                    userQuery.docs.forEach((userDoc) => {
+                        const userData = userDoc.data() as UserDocument;
+                        userEmailMap.set(userDoc.id, userData.email);
+                    });
+                } catch (error) {
+                    console.warn(`Failed to fetch user chunk starting at index ${j}:`, error);
+                }
+            }
+
+            // Map image IDs to owner emails
+            imageToUserMap.forEach((userId, imageId) => {
+                const email = userEmailMap.get(userId);
+                if (email) {
+                    imageOwnerMap.set(imageId, email);
+                }
+            });
+        } catch (error) {
+            console.warn(`Failed to fetch image chunk starting at index ${i}:`, error);
+        }
+    }
+
+    // Enhance reports with image owner email data
+    return reports.map((report) => ({
+        ...report,
+        imageOwnerEmail: imageOwnerMap.get(report.imageId),
+    }));
+};
+
+// Search reports by image owner email
+// eslint-disable-next-line @typescript-eslint/no-misused-promises
+router.get(
+    '/reports/search-by-email',
+    adminAuthMiddleware,
+    (req: AdminRequest, res: Response): void => {
+        (async () => {
+            try {
+                const { email, limit = '20' } = req.query as {
+                    email?: string;
+                    limit?: string;
+                };
+
+                if (!email || !email.trim()) {
+                    res.status(400).json({
+                        error: { message: 'email query parameter is required' },
+                    });
+                    return;
+                }
+
+                const searchLimit = Math.min(parseInt(limit, 10) || 20, 100);
+                const searchEmail = email.trim();
+
+                // First, find the user by email
+                const userQuery = await firestore
+                    .collection(COLLECTIONS.USERS)
+                    .where('email', '==', searchEmail)
+                    .limit(1)
+                    .get();
+
+                if (userQuery.empty) {
+                    res.json({
+                        reports: [],
+                        totalCount: 0,
+                        searchEmail,
+                        message: 'No user found with this email',
+                    });
+                    return;
+                }
+
+                const userId = userQuery.docs[0].id;
+
+                // Find all images owned by this user
+                const imageQuery = await firestore
+                    .collection(COLLECTIONS.IMAGE_DATA)
+                    .where('userId', '==', userId)
+                    .get();
+
+                if (imageQuery.empty) {
+                    res.json({
+                        reports: [],
+                        totalCount: 0,
+                        searchEmail,
+                        message: 'User has no images',
+                    });
+                    return;
+                }
+
+                const imageIds = imageQuery.docs.map((doc) => {
+                    const imageData = doc.data() as ImageDataDocument;
+                    return imageData.imageId;
+                });
+
+                // Find all reports for these images
+                const allReports: ReportResponse[] = [];
+
+                // Batch search reports for image IDs in chunks of 10
+                const chunkSize = 10;
+                for (let i = 0; i < imageIds.length; i += chunkSize) {
+                    const chunk = imageIds.slice(i, i + chunkSize);
+
+                    try {
+                        const reportsQuery = await firestore
+                            .collection(COLLECTIONS.REPORTS)
+                            .where('imageId', 'in', chunk)
+                            .orderBy('createdAt', 'desc')
+                            .get();
+
+                        const chunkReports: ReportResponse[] = reportsQuery.docs.map((doc) => {
+                            const data = doc.data();
+                            return {
+                                reportID: doc.id,
+                                imageId: data.imageId as string,
+                                userId: data.userId as string,
+                                category: data.category as string,
+                                description: data.description as string | undefined,
+                                status: data.status as ReportStatus,
+                                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
+                                reviewedAt: (data.reviewedAt as Timestamp)?.toDate().toISOString(),
+                                reviewedBy: data.reviewedBy as string | undefined,
+                                adminNotes: data.adminNotes as string | undefined,
+                            };
+                        });
+
+                        allReports.push(...chunkReports);
+                    } catch (error) {
+                        console.warn(
+                            `Failed to fetch reports for chunk starting at index ${i}:`,
+                            error,
+                        );
+                    }
+                }
+
+                // Sort by creation date (most recent first) and limit
+                allReports.sort(
+                    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                );
+                const limitedReports = allReports.slice(0, searchLimit);
+
+                // Enhance reports with image owner email
+                const enhancedReports = await enhanceReportsWithImageOwnerEmails(limitedReports);
+
+                res.json({
+                    reports: enhancedReports,
+                    totalCount: allReports.length,
+                    searchEmail,
+                    returnedCount: enhancedReports.length,
+                });
+            } catch (error) {
+                console.error('Search reports by email error:', error);
+                res.status(500).json({
+                    error: { message: 'Failed to search reports by email' },
+                });
             }
         })().catch(() => {
             // Error already handled in try-catch
