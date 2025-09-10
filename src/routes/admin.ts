@@ -955,13 +955,7 @@ router.put('/reports/:reportId', adminAuthMiddleware, (req: AdminRequest, res: R
             }
 
             // Validate status
-            const validStatuses: ReportStatus[] = [
-                'PENDING',
-                'UNDER_REVIEW',
-                'APPROVED',
-                'REJECTED',
-                'DUPLICATE',
-            ];
+            const validStatuses: ReportStatus[] = ['PENDING', 'APPROVED', 'REJECTED'];
             if (!validStatuses.includes(status)) {
                 res.status(400).json({
                     error: { message: 'Invalid report status' },
