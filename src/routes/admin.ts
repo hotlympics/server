@@ -8,7 +8,10 @@ import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
 import { battleHistoryService } from '../services/battle-history-service.js';
 import { storageService } from '../services/storage-service.js';
-import { reportService } from '../services/report-service.js';
+import {
+    reportService,
+    type ReportResponse as BaseReportResponse,
+} from '../services/report-service.js';
 import { firestore, COLLECTIONS } from '../config/firestore.js';
 import {
     adminAuthMiddleware,
@@ -17,7 +20,7 @@ import {
 } from '../middleware/admin-auth-middleware.js';
 import { GlickoState } from '../models/image-data.js';
 import { BattleHistory } from '../models/battle-history.js';
-import type { ReportStatus } from '../models/report.js';
+import type { ReportStatus, ReportCategory } from '../models/report.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -32,17 +35,7 @@ interface UserDocument {
     photoUrl?: string | null;
 }
 
-interface ReportResponse {
-    reportID: string;
-    imageId: string;
-    userId: string;
-    category: string;
-    description?: string;
-    status: ReportStatus;
-    createdAt: string; // ISO string for API response
-    reviewedAt?: string; // ISO string for API response
-    reviewedBy?: string;
-    adminNotes?: string;
+interface ReportResponse extends BaseReportResponse {
     imageOwnerEmail?: string;
 }
 
@@ -1211,7 +1204,7 @@ router.get(
                                 reportID: doc.id,
                                 imageId: data.imageId as string,
                                 userId: data.userId as string,
-                                category: data.category as string,
+                                category: data.category as ReportCategory,
                                 description: data.description as string | undefined,
                                 status: data.status as ReportStatus,
                                 createdAt: (data.createdAt as Timestamp)?.toDate().toISOString(),
