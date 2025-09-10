@@ -910,12 +910,12 @@ router.get(
 router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const { status, limit = '20' } = req.query as {
+            const { status, limit = '10' } = req.query as {
                 status?: ReportStatus;
                 limit?: string;
             };
 
-            const searchLimit = Math.min(parseInt(limit, 10) || 20, 50);
+            const searchLimit = Math.min(parseInt(limit, 10) || 10, 50);
 
             const result = await reportService.getReports(status, searchLimit);
 
@@ -1106,7 +1106,7 @@ router.get(
     (req: AdminRequest, res: Response): void => {
         (async () => {
             try {
-                const { email, limit = '20' } = req.query as {
+                const { email, limit = '10' } = req.query as {
                     email?: string;
                     limit?: string;
                 };
@@ -1118,7 +1118,7 @@ router.get(
                     return;
                 }
 
-                const searchLimit = Math.min(parseInt(limit, 10) || 20, 100);
+                const searchLimit = Math.min(parseInt(limit, 10) || 10, 100);
                 const searchEmail = email.trim();
 
                 // First, find the user by email
