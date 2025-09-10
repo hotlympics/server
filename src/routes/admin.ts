@@ -910,20 +910,14 @@ router.get(
 router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const {
-                status,
-                limit = '20',
-            } = req.query as {
+            const { status, limit = '20' } = req.query as {
                 status?: ReportStatus;
                 limit?: string;
             };
 
             const searchLimit = Math.min(parseInt(limit, 10) || 20, 50);
 
-            const result = await reportService.getReports(
-                status,
-                searchLimit,
-            );
+            const result = await reportService.getReports(status, searchLimit);
 
             // Enhance reports with image owner emails
             const enhancedReports = await enhanceReportsWithImageOwnerEmails(result.reports);
