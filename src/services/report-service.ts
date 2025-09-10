@@ -103,19 +103,13 @@ export class ReportService {
     }
 
     /**
-     * Get reports for admin review with cursor-based pagination
+     * Get reports for admin review
      */
     async getReports(
         status?: ReportStatus,
         limit: number = 10,
-        startAfter?: string,
-        endBefore?: string,
     ): Promise<{
         reports: ReportResponse[];
-        nextCursor: string | null;
-        prevCursor: string | null;
-        hasMore: boolean;
-        hasPrevious: boolean;
     }> {
         const safeLimit = Math.min(limit, 50); // Cap at 50 items per page
 
@@ -125,16 +119,7 @@ export class ReportService {
             query = query.where('status', '==', status);
         }
 
-        // Apply cursor pagination
-        if (startAfter) {
-            query = query.startAfter(startAfter);
-        } else if (endBefore) {
-            query = query.endBefore(endBefore).limitToLast(safeLimit);
-        }
-
-        if (!endBefore) {
-            query = query.limit(safeLimit);
-        }
+        query = query.limit(safeLimit);
 
         const snapshot = await query.get();
 
@@ -147,51 +132,8 @@ export class ReportService {
             };
         });
 
-        let hasMoreForward = false;
-        let hasPrevious = false;
-        let nextCursor: string | null = null;
-        let prevCursor: string | null = null;
-
-        if (reports.length > 0) {
-            // Test for more results forward
-            let testForwardQuery = this.reportsCollection.orderBy('createdAt', 'desc');
-            if (status) {
-                testForwardQuery = testForwardQuery.where('status', '==', status);
-            }
-            testForwardQuery = testForwardQuery
-                .startAfter(snapshot.docs[snapshot.docs.length - 1])
-                .limit(1);
-
-            const testForwardSnapshot = await testForwardQuery.get();
-            hasMoreForward = !testForwardSnapshot.empty;
-
-            // Set cursors
-            nextCursor = hasMoreForward ? reports[reports.length - 1].reportID : null;
-            prevCursor = reports[0].reportID;
-
-            // Test for previous results
-            if (startAfter) {
-                hasPrevious = true;
-            } else if (endBefore) {
-                let testBackwardQuery = this.reportsCollection.orderBy('createdAt', 'desc');
-                if (status) {
-                    testBackwardQuery = testBackwardQuery.where('status', '==', status);
-                }
-                testBackwardQuery = testBackwardQuery.endBefore(snapshot.docs[0]).limit(1);
-
-                const testBackwardSnapshot = await testBackwardQuery.get();
-                hasPrevious = !testBackwardSnapshot.empty;
-            } else {
-                hasPrevious = false;
-            }
-        }
-
         return {
             reports,
-            nextCursor,
-            prevCursor,
-            hasMore: hasMoreForward,
-            hasPrevious,
         };
     }
 

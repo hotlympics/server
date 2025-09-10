@@ -913,13 +913,9 @@ router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): 
             const {
                 status,
                 limit = '20',
-                startAfter,
-                endBefore,
             } = req.query as {
                 status?: ReportStatus;
                 limit?: string;
-                startAfter?: string;
-                endBefore?: string;
             };
 
             const searchLimit = Math.min(parseInt(limit, 10) || 20, 50);
@@ -927,8 +923,6 @@ router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): 
             const result = await reportService.getReports(
                 status,
                 searchLimit,
-                startAfter,
-                endBefore,
             );
 
             // Enhance reports with image owner emails
@@ -936,10 +930,6 @@ router.get('/reports', adminAuthMiddleware, (req: AdminRequest, res: Response): 
 
             res.json({
                 reports: enhancedReports,
-                nextCursor: result.nextCursor,
-                prevCursor: result.prevCursor,
-                hasMore: result.hasMore,
-                hasPrevious: result.hasPrevious,
                 limit: searchLimit,
                 status: status || null,
             });
