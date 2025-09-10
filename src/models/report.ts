@@ -9,7 +9,7 @@ export type ReportCategory =
     | 'INAPPROPRIATE'
     | 'OTHER';
 
-export type ReportStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'DUPLICATE';
+export type ReportStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface Report {
     reportID: string;
