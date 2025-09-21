@@ -110,4 +110,4 @@ router.post(
     },
 );
 
-export { router as leaderboardsRouter };
+export default router;
