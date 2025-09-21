@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(./run-checks.sh:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
