@@ -10,6 +10,8 @@ import { imageDataService } from '../services/image-data-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
 import { userService } from '../services/user-service.js';
+import { GlickoState } from '../models/image-data.js';
+import { Timestamp } from '@google-cloud/firestore';
 
 const router = Router();
 
@@ -281,6 +283,102 @@ router.get(
             res.status(500).json({
                 error: {
                     message: 'Failed to fetch user images',
+                    status: 500,
+                },
+            });
+        }
+    }),
+);
+
+router.get(
+    '/user/withmetadata',
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    firebaseAuthMiddleware,
+    asyncHandler(async (req: AuthRequest, res: Response) => {
+        try {
+            if (!req.user?.id) {
+                res.status(401).json({
+                    error: {
+                        message: 'User not authenticated',
+                        status: 401,
+                    },
+                });
+                return;
+            }
+
+            // Get user data to access uploadedImageIds
+            const user = await userService.getUserById(req.user.id);
+            if (!user) {
+                res.status(404).json({
+                    error: {
+                        message: 'User not found',
+                        status: 404,
+                    },
+                });
+                return;
+            }
+
+            // Map image IDs to signed URLs and metadata
+            const userImagesWithMetadata = await Promise.all(
+                user.uploadedImageIds.map(async (imageId) => {
+                    try {
+                        // Get image metadata from image-data collection
+                        const imageDataDoc = await firestore
+                            .collection('image-data')
+                            .doc(imageId)
+                            .get();
+                        if (!imageDataDoc.exists) {
+                            console.error(`Image data not found for imageId: ${imageId}`);
+                            return null;
+                        }
+
+                        const imageData = imageDataDoc.data();
+                        if (!imageData) {
+                            return null;
+                        }
+
+                        // Find the actual filename with extension
+                        const fileName = await storageService.findImageByIdPrefix(imageId);
+                        if (!fileName) {
+                            return null;
+                        }
+
+                        // Generate signed URL
+                        const signedUrl = await storageService.getSignedUrl(fileName);
+
+                        return {
+                            id: imageId,
+                            url: signedUrl,
+                            battles: imageData.battles as number,
+                            wins: imageData.wins as number,
+                            losses: imageData.losses as number,
+                            draws: imageData.draws as number,
+                            glicko: imageData.glicko as GlickoState,
+                            inPool: imageData.inPool as boolean,
+                            status: imageData.status as 'pending' | 'active' | undefined,
+                            gender: imageData.gender as 'male' | 'female',
+                            dateOfBirth: imageData.dateOfBirth as Timestamp,
+                            createdAt: imageData.createdAt as Timestamp,
+                            uploadedAt: imageData.uploadedAt as Timestamp | undefined,
+                            randomSeed: imageData.randomSeed as number,
+                        };
+                    } catch (error) {
+                        console.error(`Failed to fetch metadata for image ${imageId}:`, error);
+                        return null;
+                    }
+                }),
+            );
+
+            // Filter out any null results
+            const validUserImages = userImagesWithMetadata.filter((img) => img !== null);
+
+            // Return in reverse order (newest first) based on array position
+            res.json(validUserImages.reverse());
+        } catch (error) {
+            console.error('Error fetching user images with metadata:', error);
+            res.status(500).json({
+                error: {
+                    message: 'Failed to fetch user images with metadata',
                     status: 500,
                 },
             });
