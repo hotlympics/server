@@ -3,7 +3,7 @@ import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.j
 import type { AuthRequest } from '../middleware/firebase-auth-middleware.js';
 import { logger } from '../utils/logger.js';
 import { reportService } from '../services/report-service.js';
-import type { ReportCategory } from '../models/report.js';
+import type { ReportCategory } from '../types/report.js';
 
 const router = Router();
 

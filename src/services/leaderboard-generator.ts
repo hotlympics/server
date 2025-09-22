@@ -3,7 +3,7 @@
 
 import { leaderboardService } from './leaderboard-service.js';
 import { LEADERBOARD_CONFIG, LEADERBOARD_DATA_VERSION } from '../config/leaderboard-config.js';
-import { GlobalMetadata } from '../models/leaderboard.js';
+import { GlobalMetadata } from '../types/leaderboard.js';
 import { logger } from '../utils/logger.js';
 
 /**

@@ -49,6 +49,7 @@ const firebaseApp = initializeFirebaseAdmin();
 
 export const auth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp, 'hotlympics'); // Use the hotlympics database specifically
+export const db = firestore; // Alias for backward compatibility
 export const storage = getStorage(firebaseApp);
 
 // Re-export app for any other needs

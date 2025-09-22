@@ -18,9 +18,9 @@ import {
     adminCredentials,
     type AdminRequest,
 } from '../middleware/admin-auth-middleware.js';
-import { GlickoState } from '../models/image-data.js';
-import { BattleHistory } from '../models/battle-history.js';
-import type { ReportStatus, ReportCategory } from '../models/report.js';
+import { GlickoState } from '../types/image-data.js';
+import { BattleHistory } from '../types/battle-history.js';
+import type { ReportStatus, ReportCategory } from '../types/report.js';
 
 interface UserDocument {
     firebaseUid: string;

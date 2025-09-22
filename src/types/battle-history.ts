@@ -1,4 +1,4 @@
-import { Timestamp } from '@google-cloud/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 export interface BattleHistory {
     battleId: string;

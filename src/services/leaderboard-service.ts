@@ -15,8 +15,8 @@ import {
     LeaderboardEntry,
     GlobalMetadata,
     LeaderboardMetadata,
-} from '../models/leaderboard.js';
-import { GlickoState } from '../models/image-data.js';
+} from '../types/leaderboard.js';
+import { GlickoState } from '../types/image-data.js';
 import { Timestamp, Query, DocumentData } from '@google-cloud/firestore';
 import { logger } from '../utils/logger.js';
 

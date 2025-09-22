@@ -1,5 +1,5 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
-import { ImageData, GlickoState } from '../models/image-data.js';
+import { ImageData, GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { glicko2Service } from './glicko2-service.js';
 

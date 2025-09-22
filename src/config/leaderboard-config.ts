@@ -1,7 +1,7 @@
 // Leaderboard configuration
 // Contains the config-driven leaderboard criteria and settings
 
-import { LeaderboardType } from '../models/leaderboard.js';
+import { LeaderboardType } from '../types/leaderboard.js';
 
 export interface LeaderboardConfig {
     key: string;

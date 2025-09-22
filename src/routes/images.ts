@@ -10,7 +10,7 @@ import { imageDataService } from '../services/image-data-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
 import { userService } from '../services/user-service.js';
-import { GlickoState } from '../models/image-data.js';
+import { GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 
 const router = Router();

@@ -1,8 +1,8 @@
 import { Timestamp } from '@google-cloud/firestore';
 import { db, COLLECTIONS } from '../config/firestore.js';
 import { logger } from '../utils/logger.js';
-import type { Report, ReportCategory, ReportStatus } from '../models/report.js';
-import type { ImageData } from '../models/image-data.js';
+import type { Report, ReportCategory, ReportStatus } from '../types/report.js';
+import type { ImageData } from '../types/image-data.js';
 
 // API response type with string dates
 export interface ReportResponse {
