@@ -4,6 +4,7 @@ import { db } from '../config/firebase-admin.js';
 import { ImageData } from '../types/image-data.js';
 import { metadataService } from './metadata-service.js';
 import { logger } from '../utils/logger.js';
+import { CACHE_CONFIG } from '../config/constants.js';
 
 export class ImageCacheService {
     private static instance: ImageCacheService | null = null;
@@ -30,12 +31,12 @@ export class ImageCacheService {
         // Load initial data
         await this.refresh();
 
-        // Set up hourly refresh (3600000 ms = 1 hour)
+        // Set up hourly refresh
         this.refreshInterval = setInterval(() => {
             this.refresh().catch((error) => {
                 logger.error('Failed to refresh cache on interval:', error);
             });
-        }, 3600000);
+        }, CACHE_CONFIG.IMAGE_CACHE_REFRESH_INTERVAL_MS);
 
         logger.info('ImageCacheService initialized with hourly refresh');
     }
@@ -70,11 +71,10 @@ export class ImageCacheService {
         try {
             const metadata = await metadataService.getSystemMetadata();
             const totalImagesInPool = metadata.imagesInPool;
-            const imagesToFetch = Math.min(totalImagesInPool, 100000);
+            const imagesToFetch = Math.min(totalImagesInPool, CACHE_CONFIG.IMAGE_CACHE_MAX_SIZE);
 
             this.cache.clear();
 
-            const BATCH_SIZE = 500;
             let fetchedCount = 0;
             let lastDoc = null;
 
@@ -92,7 +92,9 @@ export class ImageCacheService {
 
                 query = query
                     .orderBy('randomSeed')
-                    .limit(Math.min(BATCH_SIZE, imagesToFetch - fetchedCount));
+                    .limit(
+                        Math.min(CACHE_CONFIG.IMAGE_CACHE_BATCH_SIZE, imagesToFetch - fetchedCount),
+                    );
 
                 if (lastDoc) {
                     query = query.startAfter(lastDoc);
@@ -122,7 +124,7 @@ export class ImageCacheService {
                 fetchedCount += snapshot.size;
                 lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
-                if (fetchedCount % 25000 === 0) {
+                if (fetchedCount % CACHE_CONFIG.IMAGE_CACHE_LOG_INTERVAL === 0) {
                     logger.info(
                         `Cache load progress: ${fetchedCount}/${imagesToFetch} images fetched`,
                     );

@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { upload } from '../middleware/upload-middleware.js';
+import { HTTP_STATUS, USER_LIMITS, UPLOAD_CONFIG, PAGINATION } from '../config/constants.js';
 import { storageService } from '../services/storage-service.js';
 import {
     firebaseAuthMiddleware,
@@ -39,7 +40,9 @@ router.post(
             }
 
             // Get file extension from request body
-            const { fileExtension = 'jpg' } = req.body as { fileExtension?: string };
+            const { fileExtension = UPLOAD_CONFIG.DEFAULT_FILE_EXTENSION } = req.body as {
+                fileExtension?: string;
+            };
 
             // Check user's current photo count from user document
             const user = await userService.getUserById(req.user.id);
@@ -53,12 +56,12 @@ router.post(
                 return;
             }
 
-            // Check if user has less than 10 images
-            if (user.uploadedImageIds.length >= 10) {
-                res.status(400).json({
+            // Check if user has less than maximum allowed images
+            if (user.uploadedImageIds.length >= USER_LIMITS.MAX_IMAGES_PER_USER) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: "You've reached the maximum limit of 10 photos",
-                        status: 400,
+                        message: `You've reached the maximum limit of ${USER_LIMITS.MAX_IMAGES_PER_USER} photos`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;
@@ -156,12 +159,12 @@ router.post(
                 return;
             }
 
-            // Check if user has less than 10 images
-            if (user.uploadedImageIds.length >= 10) {
-                res.status(400).json({
+            // Check if user has less than maximum allowed images
+            if (user.uploadedImageIds.length >= USER_LIMITS.MAX_IMAGES_PER_USER) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: "You've reached the maximum limit of 10 photos",
-                        status: 400,
+                        message: `You've reached the maximum limit of ${USER_LIMITS.MAX_IMAGES_PER_USER} photos`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;
@@ -583,11 +586,11 @@ router.get(
             }
 
             const imageCount = parseInt(count, 10);
-            if (isNaN(imageCount) || imageCount < 1 || imageCount > 100) {
-                res.status(400).json({
+            if (isNaN(imageCount) || imageCount < 1 || imageCount > PAGINATION.IMAGE_BLOCK_MAX) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: 'count must be a number between 1 and 100',
-                        status: 400,
+                        message: `count must be a number between 1 and ${PAGINATION.IMAGE_BLOCK_MAX}`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;

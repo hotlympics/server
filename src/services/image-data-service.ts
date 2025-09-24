@@ -3,6 +3,7 @@ import { ImageData, GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { glicko2Service } from './glicko2-service.js';
 import { metadataService } from './metadata-service.js';
+import { IMAGE_SELECTION, FIRESTORE_LIMITS } from '../config/constants.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
 
@@ -75,9 +76,9 @@ export const imageDataService = {
         },
     ): Promise<ImageData[] | null> {
         // Ensure count doesn't exceed Firestore's not-in limit
-        if (count > 10) {
+        if (count > IMAGE_SELECTION.MAX_IMAGES_PER_REQUEST) {
             throw new Error(
-                `Cannot request more than 10 images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`,
+                `Cannot request more than ${IMAGE_SELECTION.MAX_IMAGES_PER_REQUEST} images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`,
             );
         }
 
@@ -89,7 +90,7 @@ export const imageDataService = {
         while (selectedImages.length < count) {
             let image: ImageData | null = null;
             let attempts = 0;
-            const maxAttempts = 10;
+            const maxAttempts = IMAGE_SELECTION.MAX_SELECTION_ATTEMPTS;
 
             // Try to find an image from an unused user
             while (!image && attempts < maxAttempts) {
@@ -105,8 +106,11 @@ export const imageDataService = {
                     query = query.where('gender', '==', criteria.gender);
                 }
 
-                // Exclude already used users (Firestore 'not-in' has max 10 items)
-                const excludedUsers = Array.from(usedUserIds).slice(0, 10);
+                // Exclude already used users (Firestore 'not-in' has max items limit)
+                const excludedUsers = Array.from(usedUserIds).slice(
+                    0,
+                    FIRESTORE_LIMITS.MAX_NOT_IN_OPERATOR,
+                );
                 if (excludedUsers.length > 0) {
                     query = query.where('userId', 'not-in', excludedUsers);
                 }
