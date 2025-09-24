@@ -21,6 +21,7 @@ import {
 import { GlickoState } from '../types/image-data.js';
 import { BattleHistory } from '../types/battle-history.js';
 import type { ReportStatus, ReportCategory } from '../types/report.js';
+import { metadataService } from '../services/metadata-service.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -614,10 +615,16 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
                 .where('userId', '==', userId)
                 .get();
 
-            // 3. Delete images from Google Cloud Storage
+            // 3. Delete images from Google Cloud Storage and track pool status
+            let poolCount = 0;
             const imageDeletePromises = imageDataSnapshot.docs.map(async (doc) => {
                 const imageData = doc.data() as ImageDataDocument;
                 const imageUrl = imageData.imageUrl;
+
+                // Track pool counts for metadata update
+                if (imageData.inPool) {
+                    poolCount++;
+                }
 
                 if (imageUrl) {
                     try {
@@ -639,6 +646,14 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
             });
             await batch.commit();
             console.log(`Deleted ${imageDataSnapshot.docs.length} image-data documents`);
+
+            // Update metadata for all deleted images
+            if (imageDataSnapshot.docs.length > 0) {
+                await metadataService.decrementTotalImages(imageDataSnapshot.docs.length);
+                if (poolCount > 0) {
+                    await metadataService.decrementPoolImages(poolCount);
+                }
+            }
 
             // 5. Delete user document from Firestore
             await firestore.collection(COLLECTIONS.USERS).doc(userId).delete();
@@ -678,6 +693,7 @@ router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: 
             const imageData = imageDoc.data() as ImageDataDocument;
             const userId = imageData.userId;
             const imageUrl = imageData.imageUrl;
+            const wasInPool = imageData.inPool;
 
             // 2. Delete image from Google Cloud Storage
             try {
@@ -691,6 +707,12 @@ router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: 
             // 3. Delete image-data document from Firestore
             await firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).delete();
             console.log(`Deleted image-data document: ${imageId}`);
+
+            // Update metadata
+            await metadataService.decrementTotalImages();
+            if (wasInPool) {
+                await metadataService.decrementPoolImages();
+            }
 
             // 4. Remove imageId from user's uploadedImageIds array
             const userDoc = await firestore.collection(COLLECTIONS.USERS).doc(userId).get();

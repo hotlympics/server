@@ -16,11 +16,6 @@ export class ImageCache {
         this.entries = [];
     }
 
-    /**
-     * Add or update an entry in the cache.
-     * The entry is inserted at the correct position based on its score.
-     * If at capacity, the lowest-scoring entry is evicted.
-     */
     add(entry: ImageCacheEntry): void {
         // Binary search to find insertion point
         const insertIndex = this.binarySearch(entry.score);
@@ -34,17 +29,16 @@ export class ImageCache {
         }
     }
 
-    /**
-     * Get the current size of the cache
-     */
+    addMultiple(entries: ImageCacheEntry[]): void {
+        for (const entry of entries) {
+            this.add(entry);
+        }
+    }
+
     size(): number {
         return this.entries.length;
     }
 
-    /**
-     * Binary search to find insertion index for a given score
-     * Returns the index where the entry should be inserted to maintain descending order
-     */
     private binarySearch(score: number): number {
         let left = 0;
         let right = this.entries.length;

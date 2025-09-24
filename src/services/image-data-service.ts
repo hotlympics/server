@@ -2,6 +2,7 @@ import { firestore, COLLECTIONS } from '../config/firestore.js';
 import { ImageData, GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { glicko2Service } from './glicko2-service.js';
+import { metadataService } from './metadata-service.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
 
@@ -60,6 +61,10 @@ export const imageDataService = {
         };
 
         await firestore.collection(COLLECTION_NAME).doc(imageId).set(documentData);
+
+        // Update system metadata
+        await metadataService.incrementTotalImages();
+
         return stats;
     },
 
@@ -184,6 +189,17 @@ export const imageDataService = {
 
             return Promise.resolve();
         });
+
+        // Update metadata after transaction
+        const toAdd = poolUpdates.filter((u) => u.inPool).length;
+        const toRemove = poolUpdates.filter((u) => !u.inPool).length;
+
+        if (toAdd > 0) {
+            await metadataService.incrementPoolImages(toAdd);
+        }
+        if (toRemove > 0) {
+            await metadataService.decrementPoolImages(toRemove);
+        }
     },
 
     /**
@@ -209,6 +225,11 @@ export const imageDataService = {
 
             return Promise.resolve();
         });
+
+        // Update metadata after transaction
+        if (imageIds.length > 0) {
+            await metadataService.incrementPoolImages(imageIds.length);
+        }
     },
 
     /**
@@ -237,5 +258,12 @@ export const imageDataService = {
 
             return Promise.resolve();
         });
+
+        // Update metadata after transaction
+        if (addToPool) {
+            await metadataService.incrementPoolImages();
+        } else {
+            await metadataService.decrementPoolImages();
+        }
     },
 };

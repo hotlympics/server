@@ -12,6 +12,7 @@ import { firestore } from '../config/firestore.js';
 import { userService } from '../services/user-service.js';
 import { GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { metadataService } from '../services/metadata-service.js';
 
 const router = Router();
 
@@ -439,6 +440,11 @@ router.delete(
                 return;
             }
 
+            // Get image data before deletion to update metadata
+            const imageDoc = await firestore.collection('image-data').doc(imageId).get();
+            const imageData = imageDoc.exists ? imageDoc.data() : null;
+            const wasInPool = imageData?.inPool === true;
+
             // Delete from GCS
             await storageService.deleteImage(fileNameToDelete);
 
@@ -451,6 +457,12 @@ router.delete(
             // Also remove from poolImageIds if it was in the pool
             if (user.poolImageIds.includes(imageId)) {
                 await userService.removePoolImageId(req.user.id, imageId);
+            }
+
+            // Update metadata
+            await metadataService.decrementTotalImages();
+            if (wasInPool) {
+                await metadataService.decrementPoolImages();
             }
 
             res.json({
