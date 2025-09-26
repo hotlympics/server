@@ -14,6 +14,7 @@ const computeScore = (imageData: ImageData): number => {
 
 export class ImageCache {
     private entries: ImageCacheEntry[] = []; // Sorted by score (descending)
+    private userWeightMap: Map<string, number> = new Map();
     private maxSize = MAX_IMAGES;
 
     constructor() {
@@ -35,6 +36,13 @@ export class ImageCache {
         // Evict lowest score if over capacity
         if (this.entries.length > this.maxSize) {
             this.entries.pop(); // Remove last (lowest score)
+        }
+
+        const userId = imageData.userId;
+        if (this.userWeightMap.has(userId)) {
+            this.userWeightMap.set(userId, this.userWeightMap.get(userId)! + cacheEntry.score);
+        } else {
+            this.userWeightMap.set(userId, cacheEntry.score);
         }
     }
 
@@ -81,7 +89,7 @@ export class ImageCache {
                 if (cumWeight >= rand) {
                     selectedImages.push(entry.imageData);
                     selectedUserIds.add(entry.imageData.userId);
-                    totalWeight -= entry.score;
+                    totalWeight -= this.userWeightMap.get(entry.imageData.userId) || 0;
                     imageSelected = true;
                     break;
                 }
