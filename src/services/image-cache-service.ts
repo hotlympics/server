@@ -28,7 +28,6 @@ export class ImageCacheService {
     async initialize(): Promise<void> {
         logger.info('Initializing ImageCacheService...');
 
-        // Load initial data
         await this.refresh();
 
         // Set up hourly refresh
@@ -55,6 +54,38 @@ export class ImageCacheService {
         }
     }
 
+    getRandomImages(
+        count: number,
+        criteria: {
+            gender?: 'male' | 'female';
+        },
+    ): ImageData[] | null {
+        if (this.cache.size() < count) {
+            logger.warn(
+                `Cache size (${this.cache.size()}) is smaller than requested count (${count}), cannot fulfill request`,
+            );
+            return null;
+        }
+
+        const criteriaFunction = (image: ImageData): boolean => {
+            if (criteria.gender && criteria.gender !== image.gender) {
+                return false;
+            }
+            return true;
+        };
+
+        const images = this.cache.getWeightedRandomSample(count, criteriaFunction);
+
+        if (!images || images.length < count) {
+            logger.warn(
+                `Could not find ${count} images matching criteria. Found ${images?.length || 0} images.`,
+            );
+            return null;
+        }
+
+        return images;
+    }
+
     stop(): void {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
@@ -73,7 +104,7 @@ export class ImageCacheService {
             const totalImagesInPool = metadata.imagesInPool;
             const imagesToFetch = Math.min(totalImagesInPool, CACHE_CONFIG.IMAGE_CACHE_MAX_SIZE);
 
-            this.cache.clear();
+            const nextCache = new ImageCache();
 
             let fetchedCount = 0;
             let lastDoc = null;
@@ -119,7 +150,7 @@ export class ImageCacheService {
                     batchEntries.push(imageData);
                 });
 
-                this.cache.addMultiple(batchEntries);
+                nextCache.addMultiple(batchEntries);
 
                 fetchedCount += snapshot.size;
                 lastDoc = snapshot.docs[snapshot.docs.length - 1];
@@ -130,6 +161,8 @@ export class ImageCacheService {
                     );
                 }
             }
+
+            this.cache = nextCache;
 
             logger.info(`Cache load complete: ${this.cache.size()} images loaded into cache`);
         } catch (error) {

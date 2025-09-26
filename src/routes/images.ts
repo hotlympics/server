@@ -8,6 +8,7 @@ import {
 } from '../middleware/firebase-auth-middleware.js';
 import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.js';
 import { imageDataService } from '../services/image-data-service.js';
+import { ImageCacheService } from '../services/image-cache-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
 import { userService } from '../services/user-service.js';
@@ -611,8 +612,7 @@ router.get(
                 criteria.gender = gender;
             }
 
-            // Fetch random images with specified criteria
-            const images = await imageDataService.getRandomImages(imageCount, criteria);
+            const images = ImageCacheService.getInstance().getRandomImages(imageCount, criteria);
 
             if (!images) {
                 res.status(404).json({

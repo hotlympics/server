@@ -4,7 +4,12 @@ import { ImageCacheEntry } from '../types/image-cache-entry.js';
 const MAX_IMAGES = 100_000;
 
 const computeScore = (imageData: ImageData): number => {
-    return Math.max(100 - imageData.battles, 1);
+    let score = Math.max(100 - imageData.battles);
+
+    if (score <= 0) {
+        score = 1;
+    }
+    return score;
 };
 
 export class ImageCache {
@@ -45,6 +50,49 @@ export class ImageCache {
 
     clear(): void {
         this.entries = [];
+    }
+
+    getWeightedRandomSample(
+        count: number,
+        criteriaFunction: (imageData: ImageData) => boolean,
+    ): ImageData[] | null {
+        let totalWeight = 0;
+        for (const entry of this.entries) {
+            if (criteriaFunction(entry.imageData)) {
+                totalWeight += entry.score;
+            }
+        }
+
+        const selectedUserIds = new Set<string>();
+        const selectedImages: ImageData[] = [];
+
+        while (selectedImages.length < count) {
+            let imageSelected = false;
+            const rand = Math.random() * totalWeight;
+            let cumWeight = 0;
+            for (const entry of this.entries) {
+                if (!criteriaFunction(entry.imageData)) {
+                    continue;
+                }
+                if (selectedUserIds.has(entry.imageData.userId)) {
+                    continue;
+                }
+                cumWeight += entry.score;
+                if (cumWeight >= rand) {
+                    selectedImages.push(entry.imageData);
+                    selectedUserIds.add(entry.imageData.userId);
+                    totalWeight -= entry.score;
+                    imageSelected = true;
+                    break;
+                }
+            }
+            if (!imageSelected) {
+                console.error('Failed to select an image in this iteration');
+                break;
+            }
+        }
+
+        return selectedImages;
     }
 
     private binarySearch(score: number): number {

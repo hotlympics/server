@@ -3,6 +3,7 @@ dotenv.config();
 
 import createApp from './app.js';
 import { logger } from './utils/logger.js';
+import { ImageCacheService } from './services/image-cache-service.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
@@ -10,9 +11,13 @@ const validateEnvironment = (): void => {
     logger.info('Environment variables validated');
 };
 
-const startServer = (): void => {
+const startServer = async (): Promise<void> => {
     try {
         validateEnvironment();
+
+        const imageCacheService = ImageCacheService.getInstance();
+        await imageCacheService.initialize();
+        logger.info('ImageCacheService initialized successfully');
 
         const app = createApp();
 
@@ -32,6 +37,9 @@ const startServer = (): void => {
 
         const gracefulShutdown = (signal: string) => {
             logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
+            imageCacheService.stop();
+
             server.close(() => {
                 logger.info('HTTP server closed');
                 logger.info('Server stopped gracefully');
@@ -62,4 +70,4 @@ const startServer = (): void => {
     }
 };
 
-startServer();
+void startServer();

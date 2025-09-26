@@ -1,30 +1,10 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
-import { ImageData, GlickoState } from '../types/image-data.js';
+import { ImageData } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 import { glicko2Service } from './glicko2-service.js';
 import { metadataService } from './metadata-service.js';
-import { IMAGE_SELECTION, FIRESTORE_LIMITS } from '../config/constants.js';
 
 const COLLECTION_NAME = COLLECTIONS.IMAGE_DATA;
-
-const convertDocToImageData = (doc: FirebaseFirestore.QueryDocumentSnapshot): ImageData => {
-    const data = doc.data();
-    return {
-        imageId: data.imageId as string,
-        userId: data.userId as string,
-        imageUrl: data.imageUrl as string,
-        gender: data.gender as 'male' | 'female',
-        dateOfBirth: (data.dateOfBirth as Timestamp).toDate(),
-        battles: data.battles as number,
-        wins: data.wins as number,
-        losses: data.losses as number,
-        draws: data.draws as number,
-        glicko: data.glicko as GlickoState,
-        inPool: data.inPool as boolean,
-        status: data.status as 'pending' | 'active' | undefined,
-        randomSeed: data.randomSeed as number,
-    };
-};
 
 export const imageDataService = {
     async createImageData(
@@ -67,91 +47,6 @@ export const imageDataService = {
         await metadataService.incrementTotalImages();
 
         return stats;
-    },
-
-    async getRandomImages(
-        count: number,
-        criteria: {
-            gender?: 'male' | 'female';
-        },
-    ): Promise<ImageData[] | null> {
-        // Ensure count doesn't exceed Firestore's not-in limit
-        if (count > IMAGE_SELECTION.MAX_IMAGES_PER_REQUEST) {
-            throw new Error(
-                `Cannot request more than ${IMAGE_SELECTION.MAX_IMAGES_PER_REQUEST} images at once (requested: ${count}). This is limited by Firestore's not-in constraint.`,
-            );
-        }
-
-        const selectedImages: ImageData[] = [];
-        const usedUserIds = new Set<string>();
-
-        console.log(`[getRandomImages] Requesting ${count} images with criteria:`, criteria);
-
-        while (selectedImages.length < count) {
-            let image: ImageData | null = null;
-            let attempts = 0;
-            const maxAttempts = IMAGE_SELECTION.MAX_SELECTION_ATTEMPTS;
-
-            // Try to find an image from an unused user
-            while (!image && attempts < maxAttempts) {
-                const randomValue = Math.random();
-
-                // Build query with random threshold
-                let query: FirebaseFirestore.Query = firestore
-                    .collection(COLLECTION_NAME)
-                    .where('inPool', '==', true)
-                    .where('randomSeed', '>=', randomValue);
-
-                if (criteria.gender !== undefined) {
-                    query = query.where('gender', '==', criteria.gender);
-                }
-
-                // Exclude already used users (Firestore 'not-in' has max items limit)
-                const excludedUsers = Array.from(usedUserIds).slice(
-                    0,
-                    FIRESTORE_LIMITS.MAX_NOT_IN_OPERATOR,
-                );
-                if (excludedUsers.length > 0) {
-                    query = query.where('userId', 'not-in', excludedUsers);
-                }
-
-                const snapshot = await query.orderBy('randomSeed').limit(1).get();
-
-                if (!snapshot.empty) {
-                    const candidate = convertDocToImageData(snapshot.docs[0]);
-
-                    // Double-check user uniqueness (in case we couldn't use not-in)
-                    if (!usedUserIds.has(candidate.userId)) {
-                        image = candidate;
-                        usedUserIds.add(candidate.userId);
-                    }
-                }
-
-                attempts++;
-            }
-
-            if (image) {
-                selectedImages.push(image);
-            } else {
-                console.warn(
-                    `[getRandomImages] Could not find unique image after ${maxAttempts} attempts. Found ${selectedImages.length}/${count} images.`,
-                );
-                break; // Couldn't find enough unique users
-            }
-        }
-
-        if (selectedImages.length < count) {
-            console.warn(
-                `[getRandomImages] Only found ${selectedImages.length} images, requested ${count}. Not enough unique users with images matching criteria.`,
-            );
-            return null;
-        }
-
-        console.log(
-            `[getRandomImages] Successfully selected ${selectedImages.length} images from unique users`,
-        );
-
-        return selectedImages;
     },
 
     async updateImageStatus(
