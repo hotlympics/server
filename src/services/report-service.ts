@@ -1,8 +1,9 @@
 import { Timestamp } from '@google-cloud/firestore';
 import { db, COLLECTIONS } from '../config/firestore.js';
 import { logger } from '../utils/logger.js';
-import type { Report, ReportCategory, ReportStatus } from '../models/report.js';
-import type { ImageData } from '../models/image-data.js';
+import { metadataService } from './metadata-service.js';
+import type { Report, ReportCategory, ReportStatus } from '../types/report.js';
+import type { ImageData } from '../types/image-data.js';
 
 // API response type with string dates
 export interface ReportResponse {
@@ -229,6 +230,7 @@ export class ReportService {
             const imageData = imageDoc.data() as ImageData;
             const userId = imageData.userId;
             const imageUrl = imageData.imageUrl;
+            const wasInPool = imageData.inPool;
 
             // 2. Delete image from Google Cloud Storage
             try {
@@ -243,6 +245,12 @@ export class ReportService {
             // 3. Delete image-data document from Firestore
             await this.imagesCollection.doc(imageId).delete();
             logger.info(`Deleted image-data document: ${imageId}`);
+
+            // Update metadata
+            await metadataService.decrementTotalImages();
+            if (wasInPool) {
+                await metadataService.decrementPoolImages();
+            }
 
             // 4. Remove imageId from user's uploadedImageIds and poolImageIds arrays
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();

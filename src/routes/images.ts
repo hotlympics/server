@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { upload } from '../middleware/upload-middleware.js';
+import { HTTP_STATUS, USER_LIMITS, UPLOAD_CONFIG, PAGINATION } from '../config/constants.js';
 import { storageService } from '../services/storage-service.js';
 import {
     firebaseAuthMiddleware,
@@ -7,11 +8,13 @@ import {
 } from '../middleware/firebase-auth-middleware.js';
 import { optionalAuthMiddleware } from '../middleware/optional-auth-middleware.js';
 import { imageDataService } from '../services/image-data-service.js';
+import { ImageCacheService } from '../services/image-cache-service.js';
 import { v4 as uuidv4 } from 'uuid';
 import { firestore } from '../config/firestore.js';
 import { userService } from '../services/user-service.js';
-import { GlickoState } from '../models/image-data.js';
+import { GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
+import { metadataService } from '../services/metadata-service.js';
 
 const router = Router();
 
@@ -38,7 +41,9 @@ router.post(
             }
 
             // Get file extension from request body
-            const { fileExtension = 'jpg' } = req.body as { fileExtension?: string };
+            const { fileExtension = UPLOAD_CONFIG.DEFAULT_FILE_EXTENSION } = req.body as {
+                fileExtension?: string;
+            };
 
             // Check user's current photo count from user document
             const user = await userService.getUserById(req.user.id);
@@ -52,12 +57,12 @@ router.post(
                 return;
             }
 
-            // Check if user has less than 10 images
-            if (user.uploadedImageIds.length >= 10) {
-                res.status(400).json({
+            // Check if user has less than maximum allowed images
+            if (user.uploadedImageIds.length >= USER_LIMITS.MAX_IMAGES_PER_USER) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: "You've reached the maximum limit of 10 photos",
-                        status: 400,
+                        message: `You've reached the maximum limit of ${USER_LIMITS.MAX_IMAGES_PER_USER} photos`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;
@@ -155,12 +160,12 @@ router.post(
                 return;
             }
 
-            // Check if user has less than 10 images
-            if (user.uploadedImageIds.length >= 10) {
-                res.status(400).json({
+            // Check if user has less than maximum allowed images
+            if (user.uploadedImageIds.length >= USER_LIMITS.MAX_IMAGES_PER_USER) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: "You've reached the maximum limit of 10 photos",
-                        status: 400,
+                        message: `You've reached the maximum limit of ${USER_LIMITS.MAX_IMAGES_PER_USER} photos`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;
@@ -439,6 +444,11 @@ router.delete(
                 return;
             }
 
+            // Get image data before deletion to update metadata
+            const imageDoc = await firestore.collection('image-data').doc(imageId).get();
+            const imageData = imageDoc.exists ? imageDoc.data() : null;
+            const wasInPool = imageData?.inPool === true;
+
             // Delete from GCS
             await storageService.deleteImage(fileNameToDelete);
 
@@ -451,6 +461,12 @@ router.delete(
             // Also remove from poolImageIds if it was in the pool
             if (user.poolImageIds.includes(imageId)) {
                 await userService.removePoolImageId(req.user.id, imageId);
+            }
+
+            // Update metadata
+            await metadataService.decrementTotalImages();
+            if (wasInPool) {
+                await metadataService.decrementPoolImages();
             }
 
             res.json({
@@ -571,11 +587,11 @@ router.get(
             }
 
             const imageCount = parseInt(count, 10);
-            if (isNaN(imageCount) || imageCount < 1 || imageCount > 100) {
-                res.status(400).json({
+            if (isNaN(imageCount) || imageCount < 1 || imageCount > PAGINATION.IMAGE_BLOCK_MAX) {
+                res.status(HTTP_STATUS.BAD_REQUEST).json({
                     error: {
-                        message: 'count must be a number between 1 and 100',
-                        status: 400,
+                        message: `count must be a number between 1 and ${PAGINATION.IMAGE_BLOCK_MAX}`,
+                        status: HTTP_STATUS.BAD_REQUEST,
                     },
                 });
                 return;
@@ -596,8 +612,7 @@ router.get(
                 criteria.gender = gender;
             }
 
-            // Fetch random images with specified criteria
-            const images = await imageDataService.getRandomImages(imageCount, criteria);
+            const images = ImageCacheService.getInstance().getRandomImages(imageCount, criteria);
 
             if (!images) {
                 res.status(404).json({

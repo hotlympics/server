@@ -1,6 +1,6 @@
 import { firestore, COLLECTIONS } from '../config/firestore.js';
-import { BattleHistory } from '../models/battle-history.js';
-import { GlickoState } from '../models/image-data.js';
+import { BattleHistory } from '../types/battle-history.js';
+import { GlickoState } from '../types/image-data.js';
 import { Timestamp } from '@google-cloud/firestore';
 
 const COLLECTION_NAME = COLLECTIONS.BATTLES;

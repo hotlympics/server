@@ -1,5 +1,6 @@
 import { storage } from '../config/firebase-admin.js';
 import path from 'path';
+import { STORAGE_CONFIG } from '../config/constants.js';
 
 const bucketName = process.env.FIREBASE_STORAGE_BUCKET || 'hotlympics-images';
 const bucket = storage.bucket(bucketName);
@@ -17,7 +18,7 @@ export const storageService = {
             resumable: false,
             metadata: {
                 contentType: file.mimetype,
-                cacheControl: 'public, max-age=31536000',
+                cacheControl: STORAGE_CONFIG.CACHE_CONTROL,
             },
         });
 
@@ -64,7 +65,7 @@ export const storageService = {
         const [url] = await file.getSignedUrl({
             version: 'v4',
             action: 'read',
-            expires: Date.now() + 60 * 60 * 1000, // 1 hour from now
+            expires: Date.now() + STORAGE_CONFIG.SIGNED_URL_EXPIRY_MS,
         });
 
         return url;
@@ -80,14 +81,14 @@ export const storageService = {
         const [uploadUrl] = await file.getSignedUrl({
             version: 'v4',
             action: 'write',
-            expires: Date.now() + 15 * 60 * 1000, // 15 minutes
+            expires: Date.now() + STORAGE_CONFIG.UPLOAD_URL_EXPIRY_MS,
         });
 
         // Also generate a signed download URL
         const [downloadUrl] = await file.getSignedUrl({
             version: 'v4',
             action: 'read',
-            expires: Date.now() + 60 * 60 * 1000, // 1 hour
+            expires: Date.now() + STORAGE_CONFIG.SIGNED_URL_EXPIRY_MS,
         });
 
         return { uploadUrl, downloadUrl };

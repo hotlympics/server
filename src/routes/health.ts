@@ -23,4 +23,37 @@ router.get('/', (_req: Request, res: Response) => {
     });
 });
 
+router.get('/memory', (_req: Request, res: Response) => {
+    const memUsage = process.memoryUsage();
+    const totalMemory = 512 * 1024 * 1024; // Cloud Run has 512Mi
+
+    res.json({
+        allocated: {
+            mb: Math.round(memUsage.heapTotal / 1024 / 1024),
+            bytes: memUsage.heapTotal,
+        },
+        used: {
+            mb: Math.round(memUsage.heapUsed / 1024 / 1024),
+            bytes: memUsage.heapUsed,
+        },
+        external: {
+            mb: Math.round(memUsage.external / 1024 / 1024),
+            bytes: memUsage.external,
+        },
+        rss: {
+            mb: Math.round(memUsage.rss / 1024 / 1024),
+            bytes: memUsage.rss,
+        },
+        available: {
+            mb: Math.round((totalMemory - memUsage.rss) / 1024 / 1024),
+            bytes: totalMemory - memUsage.rss,
+        },
+        limit: {
+            mb: totalMemory / 1024 / 1024,
+            bytes: totalMemory,
+        },
+        percentUsed: Math.round((memUsage.rss / totalMemory) * 100),
+    });
+});
+
 export default router;

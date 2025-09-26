@@ -3,6 +3,14 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import { Timestamp } from '@google-cloud/firestore';
+import {
+    USER_LIMITS,
+    UPLOAD_CONFIG,
+    AUTH_CONFIG,
+    PAGINATION,
+    FIRESTORE_LIMITS,
+    VALIDATION,
+} from '../config/constants.js';
 import { auth } from '../config/firebase-admin.js';
 import { userService } from '../services/user-service.js';
 import { imageDataService } from '../services/image-data-service.js';
@@ -18,9 +26,10 @@ import {
     adminCredentials,
     type AdminRequest,
 } from '../middleware/admin-auth-middleware.js';
-import { GlickoState } from '../models/image-data.js';
-import { BattleHistory } from '../models/battle-history.js';
-import type { ReportStatus, ReportCategory } from '../models/report.js';
+import { GlickoState } from '../types/image-data.js';
+import { BattleHistory } from '../types/battle-history.js';
+import type { ReportStatus, ReportCategory } from '../types/report.js';
+import { metadataService } from '../services/metadata-service.js';
 
 interface UserDocument {
     firebaseUid: string;
@@ -79,7 +88,7 @@ const enhanceBattlesWithEmails = async (battles: BattleHistory[]): Promise<Enhan
     const userEmailMap = new Map<string, string>();
 
     // Batch fetch users in chunks of 10 (Firestore 'in' operator limit)
-    const chunkSize = 10;
+    const chunkSize = FIRESTORE_LIMITS.BATCH_CHUNK_SIZE;
     for (let i = 0; i < uniqueUserIds.length; i += chunkSize) {
         const chunk = uniqueUserIds.slice(i, i + chunkSize);
 
@@ -149,8 +158,8 @@ const router = Router();
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
-        files: 10, // Max 10 files
+        fileSize: UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES,
+        files: UPLOAD_CONFIG.MAX_FILES_PER_REQUEST,
     },
     fileFilter: (_req, file, cb) => {
         if (file.mimetype.startsWith('image/')) {
@@ -171,7 +180,9 @@ router.post('/login', (req, res: Response): void => {
             return;
         }
 
-        const token = jwt.sign({ isAdmin: true }, adminCredentials.secret, { expiresIn: '24h' });
+        const token = jwt.sign({ isAdmin: true }, adminCredentials.secret, {
+            expiresIn: AUTH_CONFIG.JWT_EXPIRY,
+        });
         res.json({ token });
     } catch (error) {
         console.error('Admin login error:', error);
@@ -184,7 +195,10 @@ router.post('/login', (req, res: Response): void => {
 router.get('/users', adminAuthMiddleware, (req: AdminRequest, res: Response): void => {
     (async () => {
         try {
-            const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+            const limit = Math.min(
+                parseInt(req.query.limit as string) || PAGINATION.ADMIN_DEFAULT_LIMIT,
+                PAGINATION.ADMIN_MAX_LIMIT,
+            );
             const startAfter = req.query.startAfter as string;
             const endBefore = req.query.endBefore as string;
             const searchEmail = req.query.searchEmail as string;
@@ -345,8 +359,7 @@ router.post(
                 }
 
                 // Validate email format
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(email)) {
+                if (!VALIDATION.EMAIL_REGEX.test(email)) {
                     res.status(400).json({ error: { message: 'Invalid email format' } });
                     return;
                 }
@@ -367,9 +380,11 @@ router.post(
                 if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
                     age--;
                 }
-                if (age < 18) {
+                if (age < USER_LIMITS.MIN_AGE_YEARS) {
                     res.status(400).json({
-                        error: { message: 'User must be at least 18 years old' },
+                        error: {
+                            message: `User must be at least ${USER_LIMITS.MIN_AGE_YEARS} years old`,
+                        },
                     });
                     return;
                 }
@@ -614,10 +629,16 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
                 .where('userId', '==', userId)
                 .get();
 
-            // 3. Delete images from Google Cloud Storage
+            // 3. Delete images from Google Cloud Storage and track pool status
+            let poolCount = 0;
             const imageDeletePromises = imageDataSnapshot.docs.map(async (doc) => {
                 const imageData = doc.data() as ImageDataDocument;
                 const imageUrl = imageData.imageUrl;
+
+                // Track pool counts for metadata update
+                if (imageData.inPool) {
+                    poolCount++;
+                }
 
                 if (imageUrl) {
                     try {
@@ -639,6 +660,14 @@ router.delete('/users/:userId', adminAuthMiddleware, (req: AdminRequest, res: Re
             });
             await batch.commit();
             console.log(`Deleted ${imageDataSnapshot.docs.length} image-data documents`);
+
+            // Update metadata for all deleted images
+            if (imageDataSnapshot.docs.length > 0) {
+                await metadataService.decrementTotalImages(imageDataSnapshot.docs.length);
+                if (poolCount > 0) {
+                    await metadataService.decrementPoolImages(poolCount);
+                }
+            }
 
             // 5. Delete user document from Firestore
             await firestore.collection(COLLECTIONS.USERS).doc(userId).delete();
@@ -678,6 +707,7 @@ router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: 
             const imageData = imageDoc.data() as ImageDataDocument;
             const userId = imageData.userId;
             const imageUrl = imageData.imageUrl;
+            const wasInPool = imageData.inPool;
 
             // 2. Delete image from Google Cloud Storage
             try {
@@ -691,6 +721,12 @@ router.delete('/photos/:imageId', adminAuthMiddleware, (req: AdminRequest, res: 
             // 3. Delete image-data document from Firestore
             await firestore.collection(COLLECTIONS.IMAGE_DATA).doc(imageId).delete();
             console.log(`Deleted image-data document: ${imageId}`);
+
+            // Update metadata
+            await metadataService.decrementTotalImages();
+            if (wasInPool) {
+                await metadataService.decrementPoolImages();
+            }
 
             // 4. Remove imageId from user's uploadedImageIds array
             const userDoc = await firestore.collection(COLLECTIONS.USERS).doc(userId).get();
@@ -831,7 +867,10 @@ router.get(
                     return;
                 }
 
-                const searchLimit = Math.min(parseInt(limit, 10) || 50, 100);
+                const searchLimit = Math.min(
+                    parseInt(limit, 10) || PAGINATION.BATTLES_DEFAULT_LIMIT,
+                    PAGINATION.BATTLES_MAX_LIMIT,
+                );
 
                 const battles = await battleHistoryService.getBattleHistoryForImage(
                     imageId,
@@ -1032,7 +1071,7 @@ const enhanceReportsWithImageOwnerEmails = async (
     const imageOwnerMap = new Map<string, string>();
 
     // Batch fetch image data in chunks of 10 (Firestore 'in' operator limit)
-    const chunkSize = 10;
+    const chunkSize = FIRESTORE_LIMITS.BATCH_CHUNK_SIZE;
     for (let i = 0; i < uniqueImageIds.length; i += chunkSize) {
         const chunk = uniqueImageIds.slice(i, i + chunkSize);
 
@@ -1165,7 +1204,7 @@ router.get(
                 const allReports: ReportResponse[] = [];
 
                 // Batch search reports for image IDs in chunks of 10
-                const chunkSize = 10;
+                const chunkSize = FIRESTORE_LIMITS.BATCH_CHUNK_SIZE;
                 for (let i = 0; i < imageIds.length; i += chunkSize) {
                     const chunk = imageIds.slice(i, i + chunkSize);
 
